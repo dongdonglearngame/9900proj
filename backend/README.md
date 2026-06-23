@@ -6,7 +6,7 @@ the feature bodies are `TODO(P18-...)` stubs for the team to implement on featur
 branches. See `../docs/sprint1-implementation-notes.md` for the TODO map.
 
 ## Run
-
+### Windows (PowerShell)
 ```powershell
 python -m venv .venv          # Python 3.11+ (the code uses datetime.UTC)
 .\.venv\Scripts\Activate.ps1
@@ -14,14 +14,26 @@ pip install -r requirements.txt
 Copy-Item .env.example .env
 uvicorn app.main:app --reload --port 8000
 ```
+### Mac
+、、、
+python3 -m venv .venv          # Python 3.11+
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+uvicorn app.main:app --reload --port 8000
+、、、
 
 ## Test
-
-```powershell
+### Windows (PowerShell)
+```
 pytest
 ruff check .
 ```
-
+### Mac
+、、、
+pytest
+ruff check .
+、、、
 ## Mock Contract
 
 With `USE_MOCK_LLM=true` (default) the backend needs no Ollama and no database:
