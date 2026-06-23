@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+.env
+*.db
+*.sqlite3
+
+# Node
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/
+
+# Data
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
