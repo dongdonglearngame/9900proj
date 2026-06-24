@@ -66,6 +66,25 @@ export function ExperimentPage() {
   }, []);
 
   const modelName = demoModels.find((model) => model.id === selectedModel)?.name ?? selectedModel;
+  const currentStep = result ? 4 : prediction ? 3 : exampleLoaded ? 2 : 1;
+  const steps = [
+    "Configure",
+    "Load Example",
+    "Run Model",
+    "Counterfactual",
+  ];
+
+  function getStepClassName(stepNumber: number) {
+    if (stepNumber < currentStep) {
+      return "completed";
+    }
+
+    if (stepNumber === currentStep) {
+      return "current";
+    }
+
+    return "upcoming";
+  }
 
   function loadExample() {
     setExampleLoaded(true);
@@ -152,10 +171,15 @@ export function ExperimentPage() {
       </header>
 
       <nav className="stepper" aria-label="Experiment progress">
-        <span className="complete">Configure</span>
-        <span className="complete">Load Example</span>
-        <span className="complete">Run Model</span>
-        <span className="current">Counterfactual</span>
+        {steps.map((step, index) => {
+          const stepNumber = index + 1;
+
+          return (
+            <span className={getStepClassName(stepNumber)} data-step={stepNumber} key={step}>
+              {step}
+            </span>
+          );
+        })}
       </nav>
 
       <section className="single-column-workspace">
@@ -181,7 +205,6 @@ export function ExperimentPage() {
             />
 
             <button className="gradient-button" type="button" onClick={runPrediction}>
-              <span aria-hidden="true">play</span>
               Run Model Prediction
             </button>
           </>

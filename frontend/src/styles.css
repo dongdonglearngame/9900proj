@@ -87,7 +87,6 @@ button {
 
 .stepper span {
   align-items: center;
-  color: #0057ff;
   display: inline-flex;
   font-size: 18px;
   gap: 12px;
@@ -105,9 +104,8 @@ button {
 
 .stepper span::before {
   align-items: center;
-  background: #1d66ff;
   border-radius: 50%;
-  color: #ffffff;
+  content: attr(data-step);
   display: inline-flex;
   font-size: 13px;
   font-weight: 800;
@@ -117,17 +115,28 @@ button {
   width: 32px;
 }
 
-.stepper .complete::before {
-  content: "\2713";
-}
-
+.stepper .completed,
 .stepper .current {
   color: #061a3a;
 }
 
+.stepper .completed::before,
 .stepper .current::before {
   background: #061a3a;
-  content: "4";
+  color: #ffffff;
+}
+
+.stepper .completed::before {
+  content: "\2713";
+}
+
+.stepper .upcoming {
+  color: #8ea0b8;
+}
+
+.stepper .upcoming::before {
+  background: #e3e9f2;
+  color: #8ea0b8;
 }
 
 .single-column-workspace {
