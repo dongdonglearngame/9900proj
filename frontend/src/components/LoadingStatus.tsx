@@ -1,5 +1,20 @@
-// TODO(P18-UI-2): show job status / phase / progress while polling.
-// Intended props (see src/types/api.ts): job: CounterfactualJob | null, loadingCounterfactual: boolean.
-export function LoadingStatus() {
-  return null;
+import type { CounterfactualJob } from "../types/api";
+
+interface LoadingStatusProps {
+  job: CounterfactualJob | null;
+}
+
+export function LoadingStatus({ job }: LoadingStatusProps) {
+  if (!job || job.status === "completed") {
+    return null;
+  }
+
+  return (
+    <div className="status-strip" role="status">
+      <strong>{job.status}</strong>
+      <span>Phase: {job.phase}</span>
+      <span>Search calls: {job.progress.search_calls}</span>
+      {job.message ? <span>{job.message}</span> : null}
+    </div>
+  );
 }
