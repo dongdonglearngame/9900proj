@@ -1,7 +1,6 @@
-from dataclasses import replace
-
 from fastapi.testclient import TestClient
 
+from app.harness.target_predict import PredictionResult
 from app.llm.mock_client import MockLLMClient
 from app.main import app
 from app.strategies.base import FrozenTargetModel
@@ -15,19 +14,20 @@ CHOICES = {
 }
 
 
-def _target_model_flips_when(condition):
-    def target_predict(scenario: str, choices: dict[str, str], model: str):
-        prediction = MockLLMClient().predict(scenario=scenario, choices=choices, model=model)
-        if not condition(scenario):
-            return prediction
-        return replace(
-            prediction,
-            answer="C",
-            answer_text=choices["C"],
-            raw_response="C",
-        )
-
-    return FrozenTargetModel(model_id="mock", target_predict_fn=target_predict)
+def _prediction(answer: str) -> PredictionResult:
+    return PredictionResult(
+        status="ok",
+        answer=answer,
+        answer_text=CHOICES.get(answer),
+        model="mock",
+        prompt_template_version="test",
+        cache_hit=False,
+        raw_response=answer,
+        option_logprobs={"A": -2.0 if answer == "C" else -0.1, "B": None, "C": -0.1, "D": None},
+        option_probs={"A": 0.1 if answer == "C" else 0.8, "B": None, "C": 0.8, "D": None},
+        top_logprobs_raw=[],
+        runtime_seconds=0.0,
+    )
 
 
 def test_s1_finds_regina_demo_edit() -> None:
@@ -106,37 +106,44 @@ def test_counterfactual_api_runs_s1_strategy() -> None:
 
 def test_s1_uses_systematic_emotion_replacement_beyond_demo_seed() -> None:
     scenario = "Maya feels panicked after a classmate ignores her message."
-    model = _target_model_flips_when(
-        lambda candidate: "worried" in candidate.lower() or "calm" in candidate.lower()
-    )
+
+    def target_predict(scenario: str, choices: dict[str, str], model: str) -> PredictionResult:
+        return _prediction("C" if "worried" in scenario else "A")
+
+    model = FrozenTargetModel(model_id="mock", target_predict_fn=target_predict)
 
     result = S1WordGreedyStrategy().generate(
         scenario=scenario,
         choices=CHOICES,
         model=model,
         foil="C",
-        budget=10,
+        budget=20,
     )
 
     assert result.status == "success"
     assert result.modified_scenario is not None
-    assert "panicked" not in result.modified_scenario.lower()
-    assert result.attempts[0].edit_description == "replace 'panicked' with 'worried'"
+    assert "worried" in result.modified_scenario
+    assert result.attempts[-1].edit_description is not None
+    assert result.attempts[-1].edit_description.startswith("emotion intensity substitution")
 
 
 def test_s1_uses_systematic_content_word_deletion() -> None:
     scenario = "Asha brings a notebook to support Omar after lunch."
-    model = _target_model_flips_when(lambda candidate: "notebook" not in candidate.lower())
+
+    def target_predict(scenario: str, choices: dict[str, str], model: str) -> PredictionResult:
+        return _prediction("C" if "notebook" not in scenario else "A")
+
+    model = FrozenTargetModel(model_id="mock", target_predict_fn=target_predict)
 
     result = S1WordGreedyStrategy().generate(
         scenario=scenario,
         choices=CHOICES,
         model=model,
         foil="C",
-        budget=10,
+        budget=30,
     )
 
     assert result.status == "success"
     assert result.modified_scenario is not None
-    assert "notebook" not in result.modified_scenario.lower()
-    assert any(attempt.edit_description == "delete 'notebook'" for attempt in result.attempts)
+    assert "notebook" not in result.modified_scenario
+    assert result.attempts[-1].edit_description == "delete content word 'notebook'"
