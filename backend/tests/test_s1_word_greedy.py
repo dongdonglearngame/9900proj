@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+from app.harness.target_predict import PredictionResult
 from app.llm.mock_client import MockLLMClient
 from app.main import app
 from app.strategies.base import CounterfactualRequest
@@ -11,6 +12,22 @@ CHOICES = {
     "C": "Stay up and lend a listening ear",
     "D": "Suggest her friend find a new partner",
 }
+
+
+def _prediction(answer: str) -> PredictionResult:
+    return PredictionResult(
+        status="ok",
+        answer=answer,
+        answer_text=CHOICES.get(answer),
+        model="mock",
+        prompt_template_version="test",
+        cache_hit=False,
+        raw_response=answer,
+        option_logprobs={"A": -2.0 if answer == "C" else -0.1, "B": None, "C": -0.1, "D": None},
+        option_probs={"A": 0.1 if answer == "C" else 0.8, "B": None, "C": 0.8, "D": None},
+        top_logprobs_raw=[],
+        runtime_seconds=0.0,
+    )
 
 
 def test_s1_finds_regina_demo_edit() -> None:
@@ -58,6 +75,51 @@ def test_s1_respects_zero_budget() -> None:
 
     assert result.status == "not_found"
     assert result.attempts == []
+
+
+def test_s1_uses_systematic_emotion_replacement_beyond_demo_seed() -> None:
+    request = CounterfactualRequest(
+        question_id="q_systematic_emotion",
+        scenario="Maya feels panicked after a classmate ignores her message.",
+        choices=CHOICES,
+        model="mock",
+        original_answer="A",
+        foil="C",
+        budget=20,
+    )
+
+    def target_predict(scenario: str, choices: dict[str, str], model: str) -> PredictionResult:
+        return _prediction("C" if "worried" in scenario else "A")
+
+    result = S1WordGreedyStrategy().generate(request, target_predict)
+
+    assert result.status == "success"
+    assert result.modified_scenario is not None
+    assert "worried" in result.modified_scenario
+    assert result.attempts[-1].edit_description is not None
+    assert result.attempts[-1].edit_description.startswith("emotion intensity substitution")
+
+
+def test_s1_uses_systematic_content_word_deletion() -> None:
+    request = CounterfactualRequest(
+        question_id="q_systematic_deletion",
+        scenario="Asha brings a notebook to support Omar after lunch.",
+        choices=CHOICES,
+        model="mock",
+        original_answer="A",
+        foil="C",
+        budget=30,
+    )
+
+    def target_predict(scenario: str, choices: dict[str, str], model: str) -> PredictionResult:
+        return _prediction("C" if "notebook" not in scenario else "A")
+
+    result = S1WordGreedyStrategy().generate(request, target_predict)
+
+    assert result.status == "success"
+    assert result.modified_scenario is not None
+    assert "notebook" not in result.modified_scenario
+    assert result.attempts[-1].edit_description == "delete content word 'notebook'"
 
 
 def test_counterfactual_api_runs_s1_strategy() -> None:
