@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { getHealth } from "../api/client";
 import { ExplanationView } from "../components/ExplanationView";
@@ -48,6 +48,9 @@ const demoScenario: ScenarioItem = {
 };
 
 export function ExperimentPage() {
+  const scenarioStepRef = useRef<HTMLDivElement>(null);
+  const predictionStepRef = useRef<HTMLDivElement>(null);
+  const explanationStepRef = useRef<HTMLDivElement>(null);
   const [health, setHealth] = useState<string>("checking");
   const [selectedModel, setSelectedModel] = useState(demoModels[0].id);
   const [selectedStrategy, setSelectedStrategy] = useState(demoStrategies[0].id);
@@ -58,6 +61,7 @@ export function ExperimentPage() {
   const [prediction, setPrediction] = useState<PredictResponse | null>(null);
   const [job, setJob] = useState<CounterfactualJob | null>(null);
   const [result, setResult] = useState<CounterfactualResult | null>(null);
+  const [scrollTarget, setScrollTarget] = useState<"scenario" | "prediction" | "explanation" | null>(null);
 
   useEffect(() => {
     getHealth()
@@ -73,6 +77,24 @@ export function ExperimentPage() {
     "Run Model",
     "Counterfactual",
   ];
+
+  useEffect(() => {
+    if (!scrollTarget) {
+      return;
+    }
+
+    const targetMap = {
+      scenario: scenarioStepRef,
+      prediction: predictionStepRef,
+      explanation: explanationStepRef,
+    };
+    const target = targetMap[scrollTarget].current;
+
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+      setScrollTarget(null);
+    }
+  }, [scrollTarget, exampleLoaded, prediction, result]);
 
   function getStepClassName(stepNumber: number) {
     if (stepNumber < currentStep) {
@@ -93,6 +115,7 @@ export function ExperimentPage() {
     setResult(null);
     setJob(null);
     setFoil("D");
+    setScrollTarget("scenario");
   }
 
   function runPrediction() {
@@ -109,6 +132,7 @@ export function ExperimentPage() {
       runtime_seconds: 1.42,
     });
     setResult(null);
+    setScrollTarget("prediction");
   }
 
   function generateCounterfactual() {
@@ -158,6 +182,7 @@ export function ExperimentPage() {
       message:
         "The model flipped from A to C after a small edit changed the timing from 'middle of the night' to 'early evening'. This suggests that the model's original advice depended more on the time of day than on the friend's emotional distress itself.",
     });
+    setScrollTarget("explanation");
   }
 
   return (
@@ -196,7 +221,7 @@ export function ExperimentPage() {
         />
 
         {exampleLoaded ? (
-          <>
+          <div className="scroll-anchor" ref={scenarioStepRef}>
             <ScenarioInputPanel
               choices={demoScenario.choices}
               scenario={demoScenario}
@@ -207,11 +232,11 @@ export function ExperimentPage() {
             <button className="gradient-button" type="button" onClick={runPrediction}>
               Run Model Prediction
             </button>
-          </>
+          </div>
         ) : null}
 
         {exampleLoaded && prediction ? (
-          <>
+          <div className="scroll-anchor" ref={predictionStepRef}>
             <PredictionView choices={demoScenario.choices} groundTruth={demoScenario.label} prediction={prediction} />
             <FoilSelector
               choices={demoScenario.choices}
@@ -220,19 +245,19 @@ export function ExperimentPage() {
               onFoilChange={setFoil}
               onGenerate={generateCounterfactual}
             />
-          </>
+          </div>
         ) : null}
 
         <LoadingStatus job={job} />
 
         {result ? (
-          <>
+          <div className="scroll-anchor" ref={explanationStepRef}>
             <ExplanationView modelName={modelName} result={result} />
             <MetricsPanel metrics={result.metrics} />
             <button className="reset-button" type="button" onClick={loadExample}>
               Start New Experiment
             </button>
-          </>
+          </div>
         ) : null}
       </section>
     </main>

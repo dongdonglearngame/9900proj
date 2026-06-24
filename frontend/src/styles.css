@@ -126,10 +126,6 @@ button {
   color: #ffffff;
 }
 
-.stepper .completed::before {
-  content: "\2713";
-}
-
 .stepper .upcoming {
   color: #8ea0b8;
 }
@@ -144,6 +140,12 @@ button {
   gap: 24px;
   margin: 0 auto;
   max-width: 960px;
+}
+
+.scroll-anchor {
+  display: grid;
+  gap: 24px;
+  scroll-margin-top: 24px;
 }
 
 .panel {
