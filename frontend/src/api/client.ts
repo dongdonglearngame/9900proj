@@ -40,8 +40,14 @@ export async function getStrategies(): Promise<StrategyInfo[]> {
   return data.strategies;
 }
 
-export async function getScenarios(): Promise<ScenarioItem[]> {
-  const data = await request<{ items: ScenarioItem[]; total: number }>("/scenarios?limit=50");
+export async function getScenarios(taskType?: string): Promise<ScenarioItem[]> {
+  const params = new URLSearchParams({ limit: "50" });
+  if (taskType) {
+    params.set("task_type", taskType);
+  }
+  const data = await request<{ items: ScenarioItem[]; total: number }>(
+    `/scenarios?${params.toString()}`,
+  );
   return data.items;
 }
 

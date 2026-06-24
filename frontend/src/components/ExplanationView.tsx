@@ -1,24 +1,64 @@
-import type { CounterfactualResult } from "../types/api";
+import type { ReactNode } from "react";
+
+import type { CounterfactualResult, DiffSpan } from "../types/api";
 
 interface ExplanationViewProps {
   modelName: string;
   result: CounterfactualResult;
 }
 
-function renderHighlightedText(text: string, target: string, className: string) {
-  const index = text.indexOf(target);
+function renderHighlightedText(
+  text: string,
+  diff: DiffSpan[],
+  side: "original" | "modified",
+) {
+  const parts: ReactNode[] = [];
+  let cursor = 0;
+  let highlighted = false;
 
-  if (index === -1) {
+  for (const span of diff) {
+    const target = side === "original" ? span.original : span.modified;
+    if (!target) {
+      continue;
+    }
+
+    const index = text.indexOf(target, cursor);
+    if (index === -1) {
+      continue;
+    }
+
+    if (index > cursor) {
+      parts.push(text.slice(cursor, index));
+    }
+
+    parts.push(
+      <mark className={side === "original" ? "delete-mark" : "insert-mark"} key={`${side}-${index}`}>
+        {target}
+      </mark>,
+    );
+    cursor = index + target.length;
+    highlighted = true;
+  }
+
+  if (!highlighted) {
     return text;
   }
 
-  return (
-    <>
-      {text.slice(0, index)}
-      <mark className={className}>{target}</mark>
-      {text.slice(index + target.length)}
-    </>
-  );
+  if (cursor < text.length) {
+    parts.push(text.slice(cursor));
+  }
+
+  return <>{parts}</>;
+}
+
+function statusCopy(result: CounterfactualResult) {
+  if (result.status === "success") {
+    return `Minimal scenario edit that flips the model's answer from ${result.original_answer} to ${result.foil}.`;
+  }
+  if (result.status === "not_found") {
+    return "No counterfactual scenario was found within the search budget.";
+  }
+  return "Counterfactual generation failed.";
 }
 
 export function ExplanationView({ modelName, result }: ExplanationViewProps) {
@@ -29,9 +69,7 @@ export function ExplanationView({ modelName, result }: ExplanationViewProps) {
       <div className="section-heading split-heading">
         <div>
           <h2>Step 5 - Counterfactual Explanation</h2>
-          <p>
-            Minimal scenario edit that flips the model's answer from {result.original_answer} to {result.foil}.
-          </p>
+          <p>{statusCopy(result)}</p>
         </div>
         <span className="model-pill">{modelName}</span>
       </div>
@@ -39,11 +77,11 @@ export function ExplanationView({ modelName, result }: ExplanationViewProps) {
       <div className="scenario-comparison">
         <article>
           <span className="readout-label">Original Scenario</span>
-          <p>{renderHighlightedText(result.original_scenario, "middle of the night", "delete-mark")}</p>
+          <p>{renderHighlightedText(result.original_scenario, result.diff, "original")}</p>
         </article>
         <article className="modified-card">
           <span className="readout-label">Modified Scenario</span>
-          <p>{renderHighlightedText(modifiedScenario, "early evening", "insert-mark")}</p>
+          <p>{renderHighlightedText(modifiedScenario, result.diff, "modified")}</p>
         </article>
       </div>
 

@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 
-import { getHealth } from "../api/client";
+import {
+  getCounterfactualJob,
+  getHealth,
+  getModels,
+  getScenarios,
+  getStrategies,
+  postCounterfactual,
+  postPredict,
+} from "../api/client";
 import { ExplanationView } from "../components/ExplanationView";
 import { FoilSelector } from "../components/FoilSelector";
 import { LoadingStatus } from "../components/LoadingStatus";
@@ -18,50 +26,50 @@ import type {
   StrategyInfo,
 } from "../types/api";
 
-const demoModels: ModelInfo[] = [
-  { id: "llama-3.1-8b", name: "Llama 3.1 8B", available: true },
-  { id: "mistral-7b", name: "Mistral 7B", available: true },
-  { id: "qwen-2.5-7b", name: "Qwen 2.5 7B", available: false },
-];
+const choiceLetters: ChoiceLetter[] = ["A", "B", "C", "D"];
+const jobPollIntervalMs = 400;
+const maxJobPolls = 25;
 
-const demoStrategies: StrategyInfo[] = [
-  { id: "minimal-edit", name: "Minimal Edit", available: true },
-  { id: "semantic-search", name: "Semantic Search", available: true },
-];
+type ScrollTarget = "scenario" | "prediction" | "explanation";
 
-const demoScenario: ScenarioItem = {
-  question_id: "emobench-001",
-  scenario_item_id: "regina-loneliness",
-  task_type: "identify-best-response",
-  dimension: "emotional support",
-  subject: "Regina",
-  scenario:
-    "Regina's best friend recently broke up with her longtime partner and is texting Regina in the middle of the night expressing feelings of loneliness.",
-  question_text: "What is the best response?",
-  choices: {
-    A: "Ignore the texts and continue sleeping",
-    B: "Respond telling her friend to seek professional help",
-    C: "Stay up and lend a listening ear to her friend",
-    D: "Suggest her friend find a new partner",
-  },
-  label: "C",
-};
+function firstAvailableId(items: Array<{ id: string; available: boolean }>) {
+  return items.find((item) => item.available)?.id ?? items[0]?.id ?? "";
+}
+
+function defaultFoil(originalAnswer: ChoiceLetter | null, label: ChoiceLetter | null) {
+  if (label && label !== originalAnswer) {
+    return label;
+  }
+  return choiceLetters.find((letter) => letter !== originalAnswer) ?? "A";
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
 
 export function ExperimentPage() {
   const scenarioStepRef = useRef<HTMLDivElement>(null);
   const predictionStepRef = useRef<HTMLDivElement>(null);
   const explanationStepRef = useRef<HTMLDivElement>(null);
   const [health, setHealth] = useState<string>("checking");
-  const [selectedModel, setSelectedModel] = useState(demoModels[0].id);
-  const [selectedStrategy, setSelectedStrategy] = useState(demoStrategies[0].id);
-  const [selectedTaskType, setSelectedTaskType] = useState(demoScenario.task_type);
-  const [scenarioText, setScenarioText] = useState(demoScenario.scenario);
-  const [exampleLoaded, setExampleLoaded] = useState(false);
-  const [foil, setFoil] = useState<ChoiceLetter>("D");
+  const [models, setModels] = useState<ModelInfo[]>([]);
+  const [strategies, setStrategies] = useState<StrategyInfo[]>([]);
+  const [selectedModel, setSelectedModel] = useState("");
+  const [selectedStrategy, setSelectedStrategy] = useState("");
+  const [selectedTaskType, setSelectedTaskType] = useState("EU");
+  const [scenario, setScenario] = useState<ScenarioItem | null>(null);
+  const [scenarioText, setScenarioText] = useState("");
+  const [foil, setFoil] = useState<ChoiceLetter>("A");
   const [prediction, setPrediction] = useState<PredictResponse | null>(null);
   const [job, setJob] = useState<CounterfactualJob | null>(null);
   const [result, setResult] = useState<CounterfactualResult | null>(null);
-  const [scrollTarget, setScrollTarget] = useState<"scenario" | "prediction" | "explanation" | null>(null);
+  const [scrollTarget, setScrollTarget] = useState<ScrollTarget | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoadingScenario, setIsLoadingScenario] = useState(false);
+  const [isPredicting, setIsPredicting] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   useEffect(() => {
     getHealth()
@@ -69,8 +77,35 @@ export function ExperimentPage() {
       .catch(() => setHealth("offline"));
   }, []);
 
-  const modelName = demoModels.find((model) => model.id === selectedModel)?.name ?? selectedModel;
-  const currentStep = result ? 4 : prediction ? 3 : exampleLoaded ? 2 : 1;
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadOptions() {
+      try {
+        const [loadedModels, loadedStrategies] = await Promise.all([getModels(), getStrategies()]);
+        if (cancelled) {
+          return;
+        }
+        setModels(loadedModels);
+        setStrategies(loadedStrategies);
+        setSelectedModel(firstAvailableId(loadedModels));
+        setSelectedStrategy(firstAvailableId(loadedStrategies));
+      } catch (loadError) {
+        if (!cancelled) {
+          setError(loadError instanceof Error ? loadError.message : "Failed to load backend options.");
+        }
+      }
+    }
+
+    void loadOptions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const modelName = models.find((model) => model.id === selectedModel)?.name ?? selectedModel;
+  const currentStep = result ? 4 : prediction ? 3 : scenario ? 2 : 1;
   const steps = [
     "Configure",
     "Load Example",
@@ -94,7 +129,7 @@ export function ExperimentPage() {
       target.scrollIntoView({ behavior: "smooth", block: "start" });
       setScrollTarget(null);
     }
-  }, [scrollTarget, exampleLoaded, prediction, result]);
+  }, [scrollTarget, scenario, prediction, result]);
 
   function getStepClassName(stepNumber: number) {
     if (stepNumber < currentStep) {
@@ -108,81 +143,117 @@ export function ExperimentPage() {
     return "upcoming";
   }
 
-  function loadExample() {
-    setExampleLoaded(true);
-    setScenarioText(demoScenario.scenario);
+  function handleTaskTypeChange(taskType: string) {
+    setSelectedTaskType(taskType);
+    setScenario(null);
+    setScenarioText("");
     setPrediction(null);
     setResult(null);
     setJob(null);
-    setFoil("D");
-    setScrollTarget("scenario");
+    setError(null);
   }
 
-  function runPrediction() {
-    setPrediction({
-      status: "completed",
-      answer: "A",
-      answer_text: demoScenario.choices.A,
-      model: modelName,
-      prompt_template_version: "demo-v1",
-      cache_hit: false,
-      raw_response: "A",
-      option_logprobs: { A: -0.15, B: -1.8, C: -2.4, D: -3.2 },
-      option_probs: { A: 0.63, B: 0.18, C: 0.13, D: 0.06 },
-      runtime_seconds: 1.42,
-    });
+  async function loadExample() {
+    setIsLoadingScenario(true);
+    setError(null);
+    setPrediction(null);
     setResult(null);
-    setScrollTarget("prediction");
+    setJob(null);
+
+    try {
+      const scenarios = await getScenarios(selectedTaskType);
+      const nextScenario = scenarios[0];
+      if (!nextScenario) {
+        throw new Error(`No scenarios returned for task type ${selectedTaskType}.`);
+      }
+
+      setScenario(nextScenario);
+      setScenarioText(nextScenario.scenario);
+      setFoil(nextScenario.label ?? "A");
+      setScrollTarget("scenario");
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Failed to load scenario.");
+    } finally {
+      setIsLoadingScenario(false);
+    }
   }
 
-  function generateCounterfactual() {
-    setJob({
-      job_id: "demo-counterfactual-job",
-      status: "completed",
-      phase: "done",
-      progress: {
-        budget: 12,
-        search_calls: 4,
-        postprocess_calls: 2,
-        proposer_calls: 1,
-      },
-      result: null,
-      message: null,
-    });
-    setResult({
-      status: "success",
-      strategy_id: selectedStrategy,
-      original_answer: prediction?.answer ?? "A",
-      foil: "C",
-      new_answer: "C",
-      original_scenario: scenarioText,
-      modified_scenario:
-        "Regina's best friend recently broke up with her longtime partner and is texting Regina in the early evening expressing feelings of loneliness.",
-      original_prediction: null,
-      new_prediction: null,
-      diff: [
-        {
-          type: "replace",
-          original: "middle of the night",
-          modified: "early evening",
-        },
-      ],
-      metrics: {
-        flip_success: true,
-        token_edit_distance: 0.12,
-        changed_word_fraction: 0.06,
-        perplexity: null,
-        fluency_score: 0.87,
-        search_calls: 4,
-        postprocess_calls: 2,
-        proposer_calls: 1,
-        total_target_calls: 7,
-        runtime_seconds: 3.8,
-      },
-      message:
-        "The model flipped from A to C after a small edit changed the timing from 'middle of the night' to 'early evening'. This suggests that the model's original advice depended more on the time of day than on the friend's emotional distress itself.",
-    });
-    setScrollTarget("explanation");
+  async function runPrediction() {
+    if (!scenario || !selectedModel) {
+      return;
+    }
+
+    setIsPredicting(true);
+    setError(null);
+    setResult(null);
+    setJob(null);
+
+    try {
+      const response = await postPredict({
+        question_id: scenario.question_id,
+        scenario: scenarioText,
+        choices: scenario.choices,
+        model: selectedModel,
+      });
+      setPrediction(response);
+      setFoil(defaultFoil(response.answer, scenario.label));
+      setScrollTarget("prediction");
+    } catch (predictError) {
+      setError(predictError instanceof Error ? predictError.message : "Prediction failed.");
+    } finally {
+      setIsPredicting(false);
+    }
+  }
+
+  async function generateCounterfactual() {
+    if (!scenario || !prediction?.answer || !selectedModel || !selectedStrategy) {
+      return;
+    }
+
+    setIsGenerating(true);
+    setError(null);
+    setResult(null);
+
+    try {
+      const created = await postCounterfactual({
+        question_id: scenario.question_id,
+        scenario: scenarioText,
+        choices: scenario.choices,
+        model: selectedModel,
+        original_answer: prediction.answer,
+        foil,
+        strategy_id: selectedStrategy,
+        budget: 20,
+      });
+
+      for (let poll = 0; poll < maxJobPolls; poll += 1) {
+        const nextJob = await getCounterfactualJob(created.job_id);
+        setJob(nextJob);
+
+        if (nextJob.status === "completed" || nextJob.status === "failed") {
+          if (nextJob.result) {
+            setResult(nextJob.result);
+            setScrollTarget("explanation");
+          }
+          if (nextJob.status === "failed") {
+            throw new Error(nextJob.message ?? "Counterfactual job failed.");
+          }
+          return;
+        }
+
+        await sleep(jobPollIntervalMs);
+      }
+
+      throw new Error("Counterfactual job did not finish before the polling limit.");
+    } catch (counterfactualError) {
+      setError(
+        counterfactualError instanceof Error
+          ? counterfactualError.message
+          : "Counterfactual generation failed.",
+      );
+    } finally {
+      setIsGenerating(false);
+    }
   }
 
   return (
@@ -208,38 +279,58 @@ export function ExperimentPage() {
       </nav>
 
       <section className="single-column-workspace">
+        {error ? (
+          <div className="status-strip error-strip" role="alert">
+            <strong>Issue</strong>
+            <span>{error}</span>
+          </div>
+        ) : null}
+
         <TaskModelSelector
-          models={demoModels}
+          models={models}
           selectedModel={selectedModel}
           selectedTaskType={selectedTaskType}
-          strategies={demoStrategies}
+          strategies={strategies}
           selectedStrategy={selectedStrategy}
           onLoadExample={loadExample}
           onModelChange={setSelectedModel}
           onStrategyChange={setSelectedStrategy}
-          onTaskTypeChange={setSelectedTaskType}
+          onTaskTypeChange={handleTaskTypeChange}
         />
 
-        {exampleLoaded ? (
+        {scenario ? (
           <div className="scroll-anchor" ref={scenarioStepRef}>
             <ScenarioInputPanel
-              choices={demoScenario.choices}
-              scenario={demoScenario}
+              choices={scenario.choices}
+              scenario={scenario}
               scenarioText={scenarioText}
               onScenarioTextChange={setScenarioText}
             />
 
-            <button className="gradient-button" type="button" onClick={runPrediction}>
-              Run Model Prediction
+            <button
+              className="gradient-button"
+              disabled={isPredicting || !selectedModel}
+              type="button"
+              onClick={runPrediction}
+            >
+              {isPredicting ? "Running Prediction" : "Run Model Prediction"}
             </button>
           </div>
         ) : null}
 
-        {exampleLoaded && prediction ? (
+        {!scenario && isLoadingScenario ? (
+          <div className="status-strip" role="status">
+            <strong>loading</strong>
+            <span>Fetching scenarios from the backend.</span>
+          </div>
+        ) : null}
+
+        {scenario && prediction ? (
           <div className="scroll-anchor" ref={predictionStepRef}>
-            <PredictionView choices={demoScenario.choices} groundTruth={demoScenario.label} prediction={prediction} />
+            <PredictionView choices={scenario.choices} groundTruth={scenario.label} prediction={prediction} />
             <FoilSelector
-              choices={demoScenario.choices}
+              choices={scenario.choices}
+              disabled={isGenerating}
               foil={foil}
               originalAnswer={prediction.answer}
               onFoilChange={setFoil}

@@ -8,6 +8,14 @@ function formatMetric(value: number | null) {
   return value === null ? "N/A" : value.toFixed(2);
 }
 
+function formatCount(value: number | null) {
+  return value === null ? "N/A" : value.toString();
+}
+
+function formatPercent(value: number | null) {
+  return value === null ? "N/A" : `${(value * 100).toFixed(1)}%`;
+}
+
 export function MetricsPanel({ metrics }: MetricsPanelProps) {
   return (
     <div className="metrics-strip">
@@ -19,15 +27,15 @@ export function MetricsPanel({ metrics }: MetricsPanelProps) {
       </div>
       <div>
         <span>Words Changed</span>
-        <strong>{metrics.search_calls + metrics.postprocess_calls}</strong>
+        <strong>{formatCount(metrics.token_edit_distance)}</strong>
       </div>
       <div>
-        <span>Edit Distance</span>
-        <strong>{formatMetric(metrics.token_edit_distance)}</strong>
+        <span>Model Calls</span>
+        <strong>{metrics.total_target_calls}</strong>
       </div>
       <div>
         <span>Minimality</span>
-        <strong>{formatMetric(metrics.fluency_score)}</strong>
+        <strong>{formatPercent(metrics.changed_word_fraction)}</strong>
       </div>
     </div>
   );
