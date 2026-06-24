@@ -1,3 +1,4 @@
+from time import perf_counter
 from uuid import uuid4
 
 from app.harness.target_predict import PredictionResult
@@ -16,6 +17,8 @@ from app.schemas.counterfactual import (
 )
 from app.services.postprocessor import IdentityPostProcessor
 from app.services.prediction_service import PredictionService, get_prediction_service
+from app.strategies.base import CounterfactualRequest, CounterfactualResult
+from app.strategies.registry import get_strategy
 
 
 class CounterfactualRunContext:
@@ -61,19 +64,7 @@ class CounterfactualRunContext:
 
 
 class CounterfactualService:
-    """Orchestrates counterfactual jobs.
-
-    TODO(P18-CF-2): replace the mock `run_job` below with the real pipeline:
-        route -> create_job -> background run_job:
-          context = CounterfactualRunContext(...)
-          strategy = registry.get_strategy(request.strategy_id)
-          raw = strategy.generate(request, context.target_predict)
-          processed = post_processor.process(raw, ...)        # shared minimiser/fluency
-          metrics = compute_counterfactual_metrics(...)        # shared metrics
-          persist counterfactual + metrics; mark job completed
-    Strategies must only verify flips through the frozen harness (context.target_predict),
-    which never sees the foil.
-    """
+    """Orchestrates counterfactual jobs through the strategy registry."""
 
     def __init__(self) -> None:
         self._job_repo = JobRepository()
@@ -105,76 +96,118 @@ class CounterfactualService:
         return self._job_repo.get(job_id)
 
     def run_job(self, job_id: str, request: CounterfactualCreateRequest) -> None:
-        # MOCK placeholder so the API contract + the frontend explanation view are
-        # demoable in mock mode. TODO(P18-CF-2): real orchestration via the strategy
-        # registry + shared post-processing + metrics. TODO(P18-CF-3): once S1 exists,
-        # the canned edit below is replaced by the real proposed edit.
-        payload = self._mock_payload(request)
-        flipped = payload.status == "success"
+        started = perf_counter()
+        context = CounterfactualRunContext(self._prediction_service, request.budget)
         self._job_repo.set(
             CounterfactualJobResponse(
                 job_id=job_id,
-                status="completed",
-                phase="done",
-                progress=CounterfactualProgress(
-                    budget=request.budget,
-                    search_calls=1 if flipped else request.budget,
-                    postprocess_calls=0,
-                    proposer_calls=0,
-                ),
-                result=payload,
-                message=None,
+                status="running",
+                phase="search",
+                progress=context.progress(),
+                result=None,
+                message="testing S1 candidate edits",
             )
         )
 
-    def _mock_payload(
-        self, request: CounterfactualCreateRequest
-    ) -> CounterfactualResultPayload:
-        # Trivial canned edit just for the mock demo (NOT the S1 algorithm).
-        modified = request.scenario.replace("middle of the night", "early evening")
-        flipped = modified != request.scenario
-        original_prediction = PredictionSnapshot(
-            answer=request.original_answer,
-            option_logprobs={"A": -0.12, "B": -3.40, "C": -2.05, "D": None},
-        )
-        metrics = compute_counterfactual_metrics(
-            original=request.scenario,
-            modified=modified if flipped else None,
-            flip_success=flipped,
-            search_calls=1 if flipped else request.budget,
-            postprocess_calls=0,
-            proposer_calls=0,
-            runtime_seconds=0.0,
-        )
-        if not flipped:
-            return CounterfactualResultPayload(
-                status="not_found",
-                strategy_id=request.strategy_id,
+        try:
+            original_prediction = self._original_snapshot(request)
+            strategy = get_strategy(request.strategy_id)
+            strategy_request = CounterfactualRequest(
+                question_id=request.question_id,
+                scenario=request.scenario,
+                choices=request.choices,
+                model=request.model,
                 original_answer=request.original_answer,
                 foil=request.foil,
-                new_answer=None,
-                original_scenario=request.scenario,
-                modified_scenario=None,
-                original_prediction=original_prediction,
-                new_prediction=None,
-                diff=[],
-                metrics=metrics,
-                message="mock: no canned edit for this scenario (real strategy is P18-CF-3)",
+                budget=request.budget,
             )
+
+            raw_result = strategy.generate(strategy_request, context.target_predict)
+            context.set_phase("postprocess")
+            processed_result = self._postprocessor.process(
+                raw_result,
+                strategy_request,
+                context.target_predict,
+            )
+            context.set_phase("metrics")
+            payload = self._build_payload(
+                result=processed_result,
+                context=context,
+                runtime_seconds=round(perf_counter() - started, 4),
+                original_prediction=original_prediction,
+            )
+            self._counterfactual_repo.add(payload)
+            self._metrics_repo.add(payload.metrics)
+            self._job_repo.set(
+                CounterfactualJobResponse(
+                    job_id=job_id,
+                    status="completed",
+                    phase="done",
+                    progress=context.progress(),
+                    result=payload,
+                    message=None,
+                )
+            )
+        except Exception as exc:
+            self._job_repo.set(
+                CounterfactualJobResponse(
+                    job_id=job_id,
+                    status="failed",
+                    phase="failed",
+                    progress=context.progress(),
+                    result=None,
+                    message=str(exc),
+                )
+            )
+
+    def _original_snapshot(self, request: CounterfactualCreateRequest) -> PredictionSnapshot:
+        prediction = self._prediction_service.target_predict(
+            scenario=request.scenario,
+            choices=request.choices,
+            model=request.model,
+        )
+        return PredictionSnapshot(
+            answer=prediction.answer or request.original_answer,
+            option_logprobs=prediction.option_logprobs,
+        )
+
+    def _build_payload(
+        self,
+        *,
+        result: CounterfactualResult,
+        context: CounterfactualRunContext,
+        runtime_seconds: float,
+        original_prediction: PredictionSnapshot,
+    ) -> CounterfactualResultPayload:
+        successful_attempt = next((attempt for attempt in result.attempts if attempt.success), None)
+        new_prediction = None
+        if successful_attempt and successful_attempt.prediction:
+            new_prediction = PredictionSnapshot(
+                answer=successful_attempt.prediction.answer,
+                option_logprobs=successful_attempt.prediction.option_logprobs,
+            )
+
+        metrics = compute_counterfactual_metrics(
+            original=result.original_scenario,
+            modified=result.modified_scenario,
+            flip_success=result.status == "success",
+            search_calls=context.search_calls,
+            postprocess_calls=context.postprocess_calls,
+            proposer_calls=context.proposer_calls,
+            runtime_seconds=runtime_seconds,
+        )
+
         return CounterfactualResultPayload(
-            status="success",
-            strategy_id=request.strategy_id,
-            original_answer=request.original_answer,
-            foil=request.foil,
-            new_answer=request.foil,
-            original_scenario=request.scenario,
-            modified_scenario=modified,
+            status=result.status,
+            strategy_id=result.strategy_id,
+            original_answer=result.original_answer,
+            foil=result.foil,
+            new_answer=result.new_answer,
+            original_scenario=result.original_scenario,
+            modified_scenario=result.modified_scenario,
             original_prediction=original_prediction,
-            new_prediction=PredictionSnapshot(
-                answer=request.foil,
-                option_logprobs={"A": -2.90, "B": -3.10, "C": -0.35, "D": None},
-            ),
-            diff=word_diff(request.scenario, modified),
+            new_prediction=new_prediction,
+            diff=word_diff(result.original_scenario, result.modified_scenario),
             metrics=metrics,
-            message="mock placeholder result (real orchestration is P18-CF-2)",
+            message=result.message,
         )
