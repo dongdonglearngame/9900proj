@@ -64,7 +64,6 @@ export function ExplanationView({ modelName, result }: ExplanationViewProps) {
 
       {result.message ? (
         <div className="insight-box">
-          <span aria-hidden="true">lightbulb</span>
           <p>{result.message}</p>
         </div>
       ) : null}

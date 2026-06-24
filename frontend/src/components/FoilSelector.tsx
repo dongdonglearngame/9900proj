@@ -42,7 +42,6 @@ export function FoilSelector({
       </div>
 
       <button className="outline-accent-button" type="button" onClick={onGenerate}>
-        <span aria-hidden="true">lightbulb</span>
         Generate Counterfactual Explanation
       </button>
     </section>
