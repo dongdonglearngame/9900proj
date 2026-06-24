@@ -2,7 +2,7 @@ from fastapi.testclient import TestClient
 
 from app.llm.mock_client import MockLLMClient
 from app.main import app
-from app.strategies.base import CounterfactualRequest
+from app.strategies.base import FrozenTargetModel
 from app.strategies.s1_word_greedy import S1WordGreedyStrategy
 
 CHOICES = {
@@ -14,20 +14,19 @@ CHOICES = {
 
 
 def test_s1_finds_regina_demo_edit() -> None:
-    request = CounterfactualRequest(
-        question_id="q_regina_001",
-        scenario=(
-            "Regina's best friend recently broke up with her longtime partner and is "
-            "texting Regina in the middle of the night expressing feelings of loneliness."
-        ),
+    scenario = (
+        "Regina's best friend recently broke up with her longtime partner and is "
+        "texting Regina in the middle of the night expressing feelings of loneliness."
+    )
+    model = FrozenTargetModel(model_id="mock", target_predict_fn=MockLLMClient().predict)
+
+    result = S1WordGreedyStrategy().generate(
+        scenario=scenario,
         choices=CHOICES,
-        model="mock",
-        original_answer="A",
+        model=model,
         foil="C",
         budget=20,
     )
-
-    result = S1WordGreedyStrategy().generate(request, MockLLMClient().predict)
 
     assert result.status == "success"
     assert result.new_answer == "C"
@@ -38,23 +37,22 @@ def test_s1_finds_regina_demo_edit() -> None:
 
 
 def test_s1_respects_zero_budget() -> None:
-    request = CounterfactualRequest(
-        question_id="q_regina_001",
-        scenario=(
-            "Regina's best friend recently broke up with her longtime partner and is "
-            "texting Regina in the middle of the night expressing feelings of loneliness."
-        ),
-        choices=CHOICES,
-        model="mock",
-        original_answer="A",
-        foil="C",
-        budget=0,
+    scenario = (
+        "Regina's best friend recently broke up with her longtime partner and is "
+        "texting Regina in the middle of the night expressing feelings of loneliness."
     )
 
     def fail_if_called(scenario: str, choices: dict[str, str], model: str):
         raise AssertionError("target_predict should not be called when budget is zero")
 
-    result = S1WordGreedyStrategy().generate(request, fail_if_called)
+    model = FrozenTargetModel(model_id="mock", target_predict_fn=fail_if_called)
+    result = S1WordGreedyStrategy().generate(
+        scenario=scenario,
+        choices=CHOICES,
+        model=model,
+        foil="C",
+        budget=0,
+    )
 
     assert result.status == "not_found"
     assert result.attempts == []

@@ -1,13 +1,20 @@
-from app.strategies.base import CounterfactualRequest, CounterfactualResult, TargetPredictFn
+from app.strategies.base import CounterfactualResult, TargetModel
 
 
 class IdentityPostProcessor:
     def process(
         self,
         raw_result: CounterfactualResult,
-        request: CounterfactualRequest,
-        target_predict: TargetPredictFn,
+        *,
+        scenario: str,
+        choices: dict[str, str],
+        model: TargetModel,
+        foil: str,
+        budget: int,
     ) -> CounterfactualResult:
-        _ = request
-        _ = target_predict
+        _ = scenario
+        _ = choices
+        _ = model
+        _ = foil
+        _ = budget
         return raw_result

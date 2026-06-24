@@ -17,7 +17,7 @@ from app.schemas.counterfactual import (
 )
 from app.services.postprocessor import IdentityPostProcessor
 from app.services.prediction_service import PredictionService, get_prediction_service
-from app.strategies.base import CounterfactualRequest, CounterfactualResult
+from app.strategies.base import CounterfactualResult, FrozenTargetModel
 from app.strategies.registry import get_strategy
 
 
@@ -105,29 +105,33 @@ class CounterfactualService:
                 phase="search",
                 progress=context.progress(),
                 result=None,
-                message="testing S1 candidate edits",
+                message="testing candidate edits",
             )
         )
 
         try:
             original_prediction = self._original_snapshot(request)
             strategy = get_strategy(request.strategy_id)
-            strategy_request = CounterfactualRequest(
-                question_id=request.question_id,
+            target_model = FrozenTargetModel(
+                model_id=request.model,
+                target_predict_fn=context.target_predict,
+            )
+
+            raw_result = strategy.generate(
                 scenario=request.scenario,
                 choices=request.choices,
-                model=request.model,
-                original_answer=request.original_answer,
+                model=target_model,
                 foil=request.foil,
                 budget=request.budget,
             )
-
-            raw_result = strategy.generate(strategy_request, context.target_predict)
             context.set_phase("postprocess")
             processed_result = self._postprocessor.process(
                 raw_result,
-                strategy_request,
-                context.target_predict,
+                scenario=request.scenario,
+                choices=request.choices,
+                model=target_model,
+                foil=request.foil,
+                budget=request.budget,
             )
             context.set_phase("metrics")
             payload = self._build_payload(
@@ -135,6 +139,7 @@ class CounterfactualService:
                 context=context,
                 runtime_seconds=round(perf_counter() - started, 4),
                 original_prediction=original_prediction,
+                original_answer=request.original_answer,
             )
             self._counterfactual_repo.add(payload)
             self._metrics_repo.add(payload.metrics)
@@ -178,6 +183,7 @@ class CounterfactualService:
         context: CounterfactualRunContext,
         runtime_seconds: float,
         original_prediction: PredictionSnapshot,
+        original_answer: str,
     ) -> CounterfactualResultPayload:
         successful_attempt = next((attempt for attempt in result.attempts if attempt.success), None)
         new_prediction = None
@@ -200,7 +206,7 @@ class CounterfactualService:
         return CounterfactualResultPayload(
             status=result.status,
             strategy_id=result.strategy_id,
-            original_answer=result.original_answer,
+            original_answer=original_answer,
             foil=result.foil,
             new_answer=result.new_answer,
             original_scenario=result.original_scenario,

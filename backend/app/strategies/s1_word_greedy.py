@@ -2,10 +2,9 @@ from collections.abc import Iterable
 
 from app.strategies.base import (
     AttemptRecord,
-    CounterfactualRequest,
     CounterfactualResult,
     CounterfactualStrategy,
-    TargetPredictFn,
+    TargetModel,
 )
 
 PHRASE_REPLACEMENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -34,18 +33,21 @@ class S1WordGreedyStrategy(CounterfactualStrategy):
 
     def generate(
         self,
-        request: CounterfactualRequest,
-        target_predict: TargetPredictFn,
+        scenario: str,
+        choices: dict[str, str],
+        model: TargetModel,
+        foil: str,
+        budget: int,
     ) -> CounterfactualResult:
         attempts: list[AttemptRecord] = []
-        budget = max(request.budget, 0)
+        budget = max(budget, 0)
 
-        for modified_scenario, description in self._generate_candidates(request.scenario):
+        for modified_scenario, description in self._generate_candidates(scenario):
             if len(attempts) >= budget:
                 break
 
-            prediction = target_predict(modified_scenario, request.choices, request.model)
-            success = prediction.answer == request.foil
+            prediction = model.target_predict(modified_scenario, choices)
+            success = prediction.answer == foil
             attempts.append(
                 AttemptRecord(
                     modified_scenario=modified_scenario,
@@ -58,11 +60,10 @@ class S1WordGreedyStrategy(CounterfactualStrategy):
             if success:
                 return CounterfactualResult(
                     status="success",
-                    original_scenario=request.scenario,
+                    original_scenario=scenario,
                     modified_scenario=modified_scenario,
-                    original_answer=request.original_answer,
                     new_answer=prediction.answer,
-                    foil=request.foil,
+                    foil=foil,
                     strategy_id=self.id,
                     attempts=attempts,
                     message=None,
@@ -70,11 +71,10 @@ class S1WordGreedyStrategy(CounterfactualStrategy):
 
         return CounterfactualResult(
             status="not_found",
-            original_scenario=request.scenario,
+            original_scenario=scenario,
             modified_scenario=None,
-            original_answer=request.original_answer,
             new_answer=None,
-            foil=request.foil,
+            foil=foil,
             strategy_id=self.id,
             attempts=attempts,
             message="no S1 candidate flipped the factual scenario within budget",
