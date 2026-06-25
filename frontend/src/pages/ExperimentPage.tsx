@@ -62,6 +62,7 @@ export function ExperimentPage() {
   const [health, setHealth] = useState<string>("checking");
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [strategies, setStrategies] = useState<StrategyInfo[]>([]);
+  const [loadedScenarios, setLoadedScenarios] = useState<ScenarioItem[]>([]);
   const [selectedModel, setSelectedModel] = useState("");
   const [selectedStrategy, setSelectedStrategy] = useState("");
   const [selectedTaskType, setSelectedTaskType] = useState("EU");
@@ -151,6 +152,7 @@ export function ExperimentPage() {
 
   function handleTaskTypeChange(taskType: string) {
     setSelectedTaskType(taskType);
+    setLoadedScenarios([]);
     setScenario(null);
     setScenarioText("");
     setFoil(null);
@@ -184,6 +186,25 @@ export function ExperimentPage() {
     setError(null);
   }
 
+  function applyScenario(nextScenario: ScenarioItem) {
+    setScenario(nextScenario);
+    setScenarioText(nextScenario.scenario);
+    setFoil(defaultFoil(nextScenario.choices, null, nextScenario.label));
+    setPrediction(null);
+    setResult(null);
+    setJob(null);
+    setError(null);
+  }
+
+  function handleScenarioSelect(questionId: string) {
+    const nextScenario = loadedScenarios.find((item) => item.question_id === questionId);
+    if (!nextScenario) {
+      return;
+    }
+
+    applyScenario(nextScenario);
+  }
+
   function handleFoilChange(nextFoil: ChoiceLetter) {
     setFoil(nextFoil);
     setResult(null);
@@ -205,9 +226,8 @@ export function ExperimentPage() {
         throw new Error(`No scenarios returned for task type ${selectedTaskType}.`);
       }
 
-      setScenario(nextScenario);
-      setScenarioText(nextScenario.scenario);
-      setFoil(defaultFoil(nextScenario.choices, null, nextScenario.label));
+      setLoadedScenarios(scenarios);
+      applyScenario(nextScenario);
       setScrollTarget("scenario");
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Failed to load scenario.");
@@ -339,9 +359,11 @@ export function ExperimentPage() {
         {scenario ? (
           <div className="scroll-anchor" ref={scenarioStepRef}>
             <ScenarioInputPanel
+              availableScenarios={loadedScenarios}
               choices={scenario.choices}
               scenario={scenario}
               scenarioText={scenarioText}
+              onScenarioSelect={handleScenarioSelect}
               onScenarioTextChange={handleScenarioTextChange}
             />
 
