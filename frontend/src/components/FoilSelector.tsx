@@ -4,6 +4,7 @@ const choiceLetters: ChoiceLetter[] = ["A", "B", "C", "D"];
 
 interface FoilSelectorProps {
   choices: ChoiceMap;
+  disabled?: boolean;
   foil: ChoiceLetter;
   originalAnswer: ChoiceLetter | null;
   onFoilChange: (foil: ChoiceLetter) => void;
@@ -12,6 +13,7 @@ interface FoilSelectorProps {
 
 export function FoilSelector({
   choices,
+  disabled = false,
   foil,
   originalAnswer,
   onFoilChange,
@@ -32,6 +34,7 @@ export function FoilSelector({
             className={`choice-card foil-choice ${foil === letter ? "selected" : ""}`}
             key={letter}
             type="button"
+            disabled={disabled}
             onClick={() => onFoilChange(letter)}
           >
             <span className="choice-badge">{letter}</span>
@@ -41,8 +44,8 @@ export function FoilSelector({
         ))}
       </div>
 
-      <button className="outline-accent-button" type="button" onClick={onGenerate}>
-        Generate Counterfactual Explanation
+      <button className="outline-accent-button" disabled={disabled} type="button" onClick={onGenerate}>
+        {disabled ? "Generating Counterfactual" : "Generate Counterfactual Explanation"}
       </button>
     </section>
   );

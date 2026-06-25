@@ -24,6 +24,11 @@ button {
   cursor: pointer;
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
 .app-shell {
   min-height: 100vh;
   padding: 44px 20px 72px;
@@ -520,6 +525,12 @@ textarea {
   flex-wrap: wrap;
   gap: 14px;
   padding: 14px 18px;
+}
+
+.error-strip {
+  background: #fff0f0;
+  border-color: #ffb9b9;
+  color: #9b1c1c;
 }
 
 .explanation-panel {

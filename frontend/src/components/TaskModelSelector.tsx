@@ -36,15 +36,15 @@ export function TaskModelSelector({
         <label>
           <span>Task Type</span>
           <select value={selectedTaskType} onChange={(event) => onTaskTypeChange(event.target.value)}>
-            <option value="identify-best-response">Identify Best Response</option>
-            <option value="emotion-recognition">Emotion Recognition</option>
-            <option value="social-support">Social Support</option>
+            <option value="EU">Emotional Understanding</option>
+            <option value="EA">Emotional Application</option>
           </select>
         </label>
 
         <label>
           <span>Local LLM Model</span>
           <select value={selectedModel} onChange={(event) => onModelChange(event.target.value)}>
+            {models.length === 0 ? <option value="">Loading models</option> : null}
             {models.map((model) => (
               <option key={model.id} value={model.id} disabled={!model.available}>
                 {model.name}
@@ -56,6 +56,7 @@ export function TaskModelSelector({
         <label>
           <span>Counterfactual Strategy</span>
           <select value={selectedStrategy} onChange={(event) => onStrategyChange(event.target.value)}>
+            {strategies.length === 0 ? <option value="">Loading strategies</option> : null}
             {strategies.map((strategy) => (
               <option key={strategy.id} value={strategy.id} disabled={!strategy.available}>
                 {strategy.name}
