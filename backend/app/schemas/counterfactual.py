@@ -1,6 +1,15 @@
 from typing import Literal
 
-from app.schemas.common import APIModel, ChoiceLetter, ChoiceMap, OptionScoreMap
+from pydantic import field_validator, model_validator
+
+from app.schemas.common import (
+    APIModel,
+    ChoiceLetter,
+    ChoiceMap,
+    OptionScoreMap,
+    validate_choice_letter,
+    validate_choice_map,
+)
 from app.schemas.job import JobPhase, JobStatus
 from app.schemas.metrics import CounterfactualMetrics
 
@@ -24,6 +33,19 @@ class CounterfactualCreateRequest(APIModel):
     foil: ChoiceLetter
     strategy_id: str
     budget: int = 20
+
+    @field_validator("choices")
+    @classmethod
+    def validate_choices(cls, choices: ChoiceMap) -> ChoiceMap:
+        return validate_choice_map(choices)
+
+    @model_validator(mode="after")
+    def validate_answers(self) -> "CounterfactualCreateRequest":
+        validate_choice_letter(self.original_answer, self.choices, "original_answer")
+        validate_choice_letter(self.foil, self.choices, "foil")
+        if self.original_answer == self.foil:
+            raise ValueError("foil must differ from original_answer")
+        return self
 
 
 class CounterfactualCreateResponse(APIModel):

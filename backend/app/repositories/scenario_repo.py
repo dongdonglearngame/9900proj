@@ -1,3 +1,12 @@
+import json
+from collections.abc import Callable, Generator
+
+from sqlalchemy.exc import SQLAlchemyError
+from sqlmodel import Session, col, func, select
+
+from app.db.models import Question
+from app.db.models import ScenarioItem as ScenarioItemRecord
+from app.db.session import get_session
 from app.schemas.scenario import ScenarioItem, ScenariosResponse
 
 # Built-in mock scenarios so the app is demoable before EmoBench is loaded.
@@ -46,6 +55,15 @@ MOCK_SCENARIOS = [
 
 
 class ScenarioRepository:
+    def __init__(
+        self,
+        session_factory: Callable[[], Generator[Session, None, None]] = get_session,
+        *,
+        use_mock_fallback: bool = True,
+    ) -> None:
+        self._session_factory = session_factory
+        self._use_mock_fallback = use_mock_fallback
+
     def list_scenarios(
         self,
         task_type: str | None,
@@ -53,9 +71,72 @@ class ScenarioRepository:
         limit: int,
         offset: int,
     ) -> ScenariosResponse:
+        loaded = self._list_loaded_scenarios(
+            task_type=task_type,
+            dimension=dimension,
+            limit=limit,
+            offset=offset,
+        )
+        if loaded.total > 0 or not self._use_mock_fallback:
+            return loaded
+
         items = MOCK_SCENARIOS
         if task_type:
             items = [item for item in items if item.task_type == task_type]
         if dimension:
             items = [item for item in items if item.dimension == dimension]
         return ScenariosResponse(items=items[offset : offset + limit], total=len(items))
+
+    def _list_loaded_scenarios(
+        self,
+        *,
+        task_type: str | None,
+        dimension: str | None,
+        limit: int,
+        offset: int,
+    ) -> ScenariosResponse:
+        session_iterator = self._session_factory()
+        session = next(session_iterator)
+        try:
+            filters = []
+            if task_type:
+                filters.append(Question.task_type == task_type)
+            if dimension:
+                filters.append(Question.dimension == dimension)
+
+            base = (
+                select(Question, ScenarioItemRecord)
+                .join(
+                    ScenarioItemRecord,
+                    col(Question.scenario_item_id) == col(ScenarioItemRecord.id),
+                )
+                .order_by(Question.id)
+            )
+            count_query = select(func.count()).select_from(Question)
+            for condition in filters:
+                base = base.where(condition)
+                count_query = count_query.where(condition)
+
+            total = session.exec(count_query).one()
+            rows = session.exec(base.offset(offset).limit(limit)).all()
+        except SQLAlchemyError:
+            return ScenariosResponse(items=[], total=0)
+        finally:
+            session.close()
+            session_iterator.close()
+
+        items = [
+            ScenarioItem(
+                question_id=question.id,
+                scenario_item_id=scenario.id,
+                task_type=question.task_type,
+                dimension=question.dimension,
+                subject=scenario.subject,
+                scenario=scenario.scenario_text,
+                question_text=question.question_text,
+                choices=json.loads(question.choices_json),
+                label=question.ground_truth,  # type: ignore[arg-type]
+            )
+            for question, scenario in rows
+        ]
+        return ScenariosResponse(items=items, total=total)

@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 from app.harness.target_predict import PredictionResult
 from app.llm.mock_client import MockLLMClient
 from app.main import app
-from app.strategies.base import CounterfactualRequest
+from app.strategies.base import FrozenTargetModel
 from app.strategies.s1_word_greedy import S1WordGreedyStrategy
 
 CHOICES = {
@@ -31,20 +31,19 @@ def _prediction(answer: str) -> PredictionResult:
 
 
 def test_s1_finds_regina_demo_edit() -> None:
-    request = CounterfactualRequest(
-        question_id="q_regina_001",
-        scenario=(
-            "Regina's best friend recently broke up with her longtime partner and is "
-            "texting Regina in the middle of the night expressing feelings of loneliness."
-        ),
+    scenario = (
+        "Regina's best friend recently broke up with her longtime partner and is "
+        "texting Regina in the middle of the night expressing feelings of loneliness."
+    )
+    model = FrozenTargetModel(model_id="mock", target_predict_fn=MockLLMClient().predict)
+
+    result = S1WordGreedyStrategy().generate(
+        scenario=scenario,
         choices=CHOICES,
-        model="mock",
-        original_answer="A",
+        model=model,
         foil="C",
         budget=20,
     )
-
-    result = S1WordGreedyStrategy().generate(request, MockLLMClient().predict)
 
     assert result.status == "success"
     assert result.new_answer == "C"
@@ -55,71 +54,25 @@ def test_s1_finds_regina_demo_edit() -> None:
 
 
 def test_s1_respects_zero_budget() -> None:
-    request = CounterfactualRequest(
-        question_id="q_regina_001",
-        scenario=(
-            "Regina's best friend recently broke up with her longtime partner and is "
-            "texting Regina in the middle of the night expressing feelings of loneliness."
-        ),
-        choices=CHOICES,
-        model="mock",
-        original_answer="A",
-        foil="C",
-        budget=0,
+    scenario = (
+        "Regina's best friend recently broke up with her longtime partner and is "
+        "texting Regina in the middle of the night expressing feelings of loneliness."
     )
 
     def fail_if_called(scenario: str, choices: dict[str, str], model: str):
         raise AssertionError("target_predict should not be called when budget is zero")
 
-    result = S1WordGreedyStrategy().generate(request, fail_if_called)
+    model = FrozenTargetModel(model_id="mock", target_predict_fn=fail_if_called)
+    result = S1WordGreedyStrategy().generate(
+        scenario=scenario,
+        choices=CHOICES,
+        model=model,
+        foil="C",
+        budget=0,
+    )
 
     assert result.status == "not_found"
     assert result.attempts == []
-
-
-def test_s1_uses_systematic_emotion_replacement_beyond_demo_seed() -> None:
-    request = CounterfactualRequest(
-        question_id="q_systematic_emotion",
-        scenario="Maya feels panicked after a classmate ignores her message.",
-        choices=CHOICES,
-        model="mock",
-        original_answer="A",
-        foil="C",
-        budget=20,
-    )
-
-    def target_predict(scenario: str, choices: dict[str, str], model: str) -> PredictionResult:
-        return _prediction("C" if "worried" in scenario else "A")
-
-    result = S1WordGreedyStrategy().generate(request, target_predict)
-
-    assert result.status == "success"
-    assert result.modified_scenario is not None
-    assert "worried" in result.modified_scenario
-    assert result.attempts[-1].edit_description is not None
-    assert result.attempts[-1].edit_description.startswith("emotion intensity substitution")
-
-
-def test_s1_uses_systematic_content_word_deletion() -> None:
-    request = CounterfactualRequest(
-        question_id="q_systematic_deletion",
-        scenario="Asha brings a notebook to support Omar after lunch.",
-        choices=CHOICES,
-        model="mock",
-        original_answer="A",
-        foil="C",
-        budget=30,
-    )
-
-    def target_predict(scenario: str, choices: dict[str, str], model: str) -> PredictionResult:
-        return _prediction("C" if "notebook" not in scenario else "A")
-
-    result = S1WordGreedyStrategy().generate(request, target_predict)
-
-    assert result.status == "success"
-    assert result.modified_scenario is not None
-    assert "notebook" not in result.modified_scenario
-    assert result.attempts[-1].edit_description == "delete content word 'notebook'"
 
 
 def test_counterfactual_api_runs_s1_strategy() -> None:
@@ -149,3 +102,48 @@ def test_counterfactual_api_runs_s1_strategy() -> None:
     assert job["result"]["new_answer"] == "C"
     assert "early evening" in job["result"]["modified_scenario"]
     assert job["result"]["metrics"]["search_calls"] == 1
+
+
+def test_s1_uses_systematic_emotion_replacement_beyond_demo_seed() -> None:
+    scenario = "Maya feels panicked after a classmate ignores her message."
+
+    def target_predict(scenario: str, choices: dict[str, str], model: str) -> PredictionResult:
+        return _prediction("C" if "worried" in scenario else "A")
+
+    model = FrozenTargetModel(model_id="mock", target_predict_fn=target_predict)
+
+    result = S1WordGreedyStrategy().generate(
+        scenario=scenario,
+        choices=CHOICES,
+        model=model,
+        foil="C",
+        budget=20,
+    )
+
+    assert result.status == "success"
+    assert result.modified_scenario is not None
+    assert "worried" in result.modified_scenario
+    assert result.attempts[-1].edit_description is not None
+    assert result.attempts[-1].edit_description.startswith("emotion intensity substitution")
+
+
+def test_s1_uses_systematic_content_word_deletion() -> None:
+    scenario = "Asha brings a notebook to support Omar after lunch."
+
+    def target_predict(scenario: str, choices: dict[str, str], model: str) -> PredictionResult:
+        return _prediction("C" if "notebook" not in scenario else "A")
+
+    model = FrozenTargetModel(model_id="mock", target_predict_fn=target_predict)
+
+    result = S1WordGreedyStrategy().generate(
+        scenario=scenario,
+        choices=CHOICES,
+        model=model,
+        foil="C",
+        budget=30,
+    )
+
+    assert result.status == "success"
+    assert result.modified_scenario is not None
+    assert "notebook" not in result.modified_scenario
+    assert result.attempts[-1].edit_description == "delete content word 'notebook'"
