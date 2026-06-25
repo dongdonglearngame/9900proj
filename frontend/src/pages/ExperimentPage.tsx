@@ -28,8 +28,9 @@ import type {
 } from "../types/api";
 import { choiceLetters } from "../types/api";
 
-const jobPollIntervalMs = 400;
-const maxJobPolls = 25;
+const jobPollIntervalMs = 500;
+const maxJobPolls = 180;
+const maxJobWaitSeconds = Math.round((jobPollIntervalMs * maxJobPolls) / 1000);
 
 type ScrollTarget = "scenario" | "prediction" | "explanation";
 
@@ -271,6 +272,7 @@ export function ExperimentPage() {
     setIsGenerating(true);
     setError(null);
     setResult(null);
+    setJob(null);
 
     try {
       const created = await postCounterfactual({
@@ -284,8 +286,10 @@ export function ExperimentPage() {
         budget: 20,
       });
 
+      let lastJob: CounterfactualJob | null = null;
       for (let poll = 0; poll < maxJobPolls; poll += 1) {
         const nextJob = await getCounterfactualJob(created.job_id);
+        lastJob = nextJob;
         setJob(nextJob);
 
         if (nextJob.status === "completed" || nextJob.status === "failed") {
@@ -302,7 +306,10 @@ export function ExperimentPage() {
         await sleep(jobPollIntervalMs);
       }
 
-      throw new Error("Counterfactual job did not finish before the polling limit.");
+      setJob(null);
+      throw new Error(
+        `Counterfactual search did not finish within ${maxJobWaitSeconds} seconds. Last known phase: ${lastJob?.phase ?? "unknown"}.`,
+      );
     } catch (counterfactualError) {
       setError(
         counterfactualError instanceof Error
