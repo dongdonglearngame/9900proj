@@ -1,7 +1,6 @@
 from dataclasses import dataclass, replace
-from typing import Literal
 
-ChoiceLetter = Literal["A", "B", "C", "D"]
+from app.schemas.common import ChoiceLetter, OptionScoreMap
 
 
 @dataclass(frozen=True)
@@ -13,8 +12,8 @@ class PredictionResult:
     prompt_template_version: str
     cache_hit: bool
     raw_response: str
-    option_logprobs: dict[ChoiceLetter, float | None]
-    option_probs: dict[ChoiceLetter, float | None]
+    option_logprobs: OptionScoreMap
+    option_probs: OptionScoreMap
     top_logprobs_raw: list[dict]
     runtime_seconds: float
 

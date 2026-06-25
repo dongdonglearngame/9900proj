@@ -9,7 +9,8 @@ The app is a local counterfactual explanation tool for multiple-choice emotional
 - Backend: FastAPI, Pydantic, SQLModel, SQLite-ready repositories
 - Frontend: Vite, React, TypeScript
 - LLM runtime: local Ollama via a frozen harness
-- Current mode: mock end-to-end workflow, no Ollama or database required
+- Default mode: mock-safe workflow, no Ollama or EmoBench data required
+- Real demo mode: opt-in local setup documented in `docs/real-demo-mode.md`
 
 ## Quick Start
 
@@ -37,6 +38,8 @@ Open:
 
 - Backend docs: http://localhost:8000/docs
 - Frontend: http://localhost:5173
+
+For a local real-model demo with Ollama + EmoBench, see [docs/real-demo-mode.md](docs/real-demo-mode.md).
 
 ## Development Rules
 

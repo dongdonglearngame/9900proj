@@ -4,7 +4,7 @@ import app.llm.ollama_client as ollama_module
 from app.harness.prompt_templates import build_target_messages
 from app.llm.ollama_client import OllamaClient
 
-CHOICES = {"A": "a", "B": "b", "C": "c", "D": "d"}
+CHOICES = {"A": "a", "B": "b", "C": "c", "D": "d", "E": "e", "F": "f"}
 
 
 class _FakeResponse:
@@ -54,10 +54,16 @@ def test_predict_sends_frozen_payload_and_parses_answer(monkeypatch) -> None:
     assert result.option_logprobs["C"] == -2.0
     assert result.option_logprobs["B"] is None
     assert result.option_logprobs["D"] is None
+    assert result.option_logprobs["E"] is None
+    assert result.option_logprobs["F"] is None
     assert result.top_logprobs_raw
     assert captured["url"].endswith("/api/chat")
     assert captured["json"]["model"] == "mock-model"
     assert captured["json"]["messages"] == build_target_messages("scenario", CHOICES)
+    assert captured["json"]["messages"][0]["content"].endswith(
+        "A, B, C, D, E, or F. Do not explain."
+    )
+    assert "F. f" in captured["json"]["messages"][1]["content"]
     assert captured["json"]["stream"] is False
     assert captured["json"]["logprobs"] is True
     assert captured["json"]["options"]["temperature"] == 0

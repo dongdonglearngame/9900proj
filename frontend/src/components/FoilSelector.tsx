@@ -1,11 +1,9 @@
-import type { ChoiceLetter, ChoiceMap } from "../types/api";
-
-const choiceLetters: ChoiceLetter[] = ["A", "B", "C", "D"];
+import { choiceLetters, type ChoiceLetter, type ChoiceMap } from "../types/api";
 
 interface FoilSelectorProps {
   choices: ChoiceMap;
   disabled?: boolean;
-  foil: ChoiceLetter;
+  foil: ChoiceLetter | null;
   originalAnswer: ChoiceLetter | null;
   onFoilChange: (foil: ChoiceLetter) => void;
   onGenerate: () => void;
@@ -19,7 +17,7 @@ export function FoilSelector({
   onFoilChange,
   onGenerate,
 }: FoilSelectorProps) {
-  const availableChoices = choiceLetters.filter((letter) => letter !== originalAnswer);
+  const availableChoices = choiceLetters(choices).filter((letter) => letter !== originalAnswer);
 
   return (
     <section className="panel">

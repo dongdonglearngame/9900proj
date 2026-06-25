@@ -17,6 +17,7 @@ import { PredictionView } from "../components/PredictionView";
 import { ScenarioInputPanel } from "../components/ScenarioInputPanel";
 import { TaskModelSelector } from "../components/TaskModelSelector";
 import type {
+  ChoiceMap,
   ChoiceLetter,
   CounterfactualJob,
   CounterfactualResult,
@@ -25,8 +26,8 @@ import type {
   ScenarioItem,
   StrategyInfo,
 } from "../types/api";
+import { choiceLetters } from "../types/api";
 
-const choiceLetters: ChoiceLetter[] = ["A", "B", "C", "D"];
 const jobPollIntervalMs = 400;
 const maxJobPolls = 25;
 
@@ -36,11 +37,16 @@ function firstAvailableId(items: Array<{ id: string; available: boolean }>) {
   return items.find((item) => item.available)?.id ?? items[0]?.id ?? "";
 }
 
-function defaultFoil(originalAnswer: ChoiceLetter | null, label: ChoiceLetter | null) {
+function defaultFoil(
+  choices: ChoiceMap,
+  originalAnswer: ChoiceLetter | null,
+  label: ChoiceLetter | null,
+): ChoiceLetter | null {
+  const letters = choiceLetters(choices);
   if (label && label !== originalAnswer) {
     return label;
   }
-  return choiceLetters.find((letter) => letter !== originalAnswer) ?? "A";
+  return letters.find((letter) => letter !== originalAnswer) ?? null;
 }
 
 function sleep(ms: number) {
@@ -56,12 +62,13 @@ export function ExperimentPage() {
   const [health, setHealth] = useState<string>("checking");
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [strategies, setStrategies] = useState<StrategyInfo[]>([]);
+  const [loadedScenarios, setLoadedScenarios] = useState<ScenarioItem[]>([]);
   const [selectedModel, setSelectedModel] = useState("");
   const [selectedStrategy, setSelectedStrategy] = useState("");
   const [selectedTaskType, setSelectedTaskType] = useState("EU");
   const [scenario, setScenario] = useState<ScenarioItem | null>(null);
   const [scenarioText, setScenarioText] = useState("");
-  const [foil, setFoil] = useState<ChoiceLetter>("A");
+  const [foil, setFoil] = useState<ChoiceLetter | null>(null);
   const [prediction, setPrediction] = useState<PredictResponse | null>(null);
   const [job, setJob] = useState<CounterfactualJob | null>(null);
   const [result, setResult] = useState<CounterfactualResult | null>(null);
@@ -145,8 +152,10 @@ export function ExperimentPage() {
 
   function handleTaskTypeChange(taskType: string) {
     setSelectedTaskType(taskType);
+    setLoadedScenarios([]);
     setScenario(null);
     setScenarioText("");
+    setFoil(null);
     setPrediction(null);
     setResult(null);
     setJob(null);
@@ -155,6 +164,7 @@ export function ExperimentPage() {
 
   function handleModelChange(modelId: string) {
     setSelectedModel(modelId);
+    setFoil(defaultFoil(scenario?.choices ?? {}, null, scenario?.label ?? null));
     setPrediction(null);
     setResult(null);
     setJob(null);
@@ -174,6 +184,25 @@ export function ExperimentPage() {
     setResult(null);
     setJob(null);
     setError(null);
+  }
+
+  function applyScenario(nextScenario: ScenarioItem) {
+    setScenario(nextScenario);
+    setScenarioText(nextScenario.scenario);
+    setFoil(defaultFoil(nextScenario.choices, null, nextScenario.label));
+    setPrediction(null);
+    setResult(null);
+    setJob(null);
+    setError(null);
+  }
+
+  function handleScenarioSelect(questionId: string) {
+    const nextScenario = loadedScenarios.find((item) => item.question_id === questionId);
+    if (!nextScenario) {
+      return;
+    }
+
+    applyScenario(nextScenario);
   }
 
   function handleFoilChange(nextFoil: ChoiceLetter) {
@@ -197,9 +226,8 @@ export function ExperimentPage() {
         throw new Error(`No scenarios returned for task type ${selectedTaskType}.`);
       }
 
-      setScenario(nextScenario);
-      setScenarioText(nextScenario.scenario);
-      setFoil(nextScenario.label ?? "A");
+      setLoadedScenarios(scenarios);
+      applyScenario(nextScenario);
       setScrollTarget("scenario");
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Failed to load scenario.");
@@ -226,7 +254,7 @@ export function ExperimentPage() {
         model: selectedModel,
       });
       setPrediction(response);
-      setFoil(defaultFoil(response.answer, scenario.label));
+      setFoil(defaultFoil(scenario.choices, response.answer, scenario.label));
       setScrollTarget("prediction");
     } catch (predictError) {
       setError(predictError instanceof Error ? predictError.message : "Prediction failed.");
@@ -236,7 +264,7 @@ export function ExperimentPage() {
   }
 
   async function generateCounterfactual() {
-    if (!scenario || !prediction?.answer || !selectedModel || !selectedStrategy) {
+    if (!scenario || !prediction?.answer || !foil || !selectedModel || !selectedStrategy) {
       return;
     }
 
@@ -331,9 +359,11 @@ export function ExperimentPage() {
         {scenario ? (
           <div className="scroll-anchor" ref={scenarioStepRef}>
             <ScenarioInputPanel
+              availableScenarios={loadedScenarios}
               choices={scenario.choices}
               scenario={scenario}
               scenarioText={scenarioText}
+              onScenarioSelect={handleScenarioSelect}
               onScenarioTextChange={handleScenarioTextChange}
             />
 

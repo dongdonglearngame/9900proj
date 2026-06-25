@@ -193,6 +193,12 @@ button:disabled {
   grid-template-columns: minmax(220px, 1fr) minmax(210px, 0.9fr) minmax(210px, 0.9fr) auto;
 }
 
+.scenario-picker-grid {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
 label {
   color: #526b92;
   display: grid;

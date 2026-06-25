@@ -1,4 +1,12 @@
-from app.schemas.common import APIModel, ChoiceLetter, ChoiceMap, OptionScoreMap
+from pydantic import field_validator
+
+from app.schemas.common import (
+    APIModel,
+    ChoiceLetter,
+    ChoiceMap,
+    OptionScoreMap,
+    validate_choice_map,
+)
 
 
 class PredictRequest(APIModel):
@@ -6,6 +14,11 @@ class PredictRequest(APIModel):
     scenario: str
     choices: ChoiceMap
     model: str
+
+    @field_validator("choices")
+    @classmethod
+    def validate_choices(cls, choices: ChoiceMap) -> ChoiceMap:
+        return validate_choice_map(choices)
 
 
 class PredictionResponse(APIModel):
