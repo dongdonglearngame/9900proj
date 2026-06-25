@@ -1,8 +1,21 @@
+import re
+
+_CLEAN_LETTER_RE = re.compile(r"^\s*([ABCD])\s*[\.\)]?\s*$", re.IGNORECASE)
+_ANSWER_PREFIX_RE = re.compile(
+    r"^\s*(?:answer|final answer|choice|the answer|the correct answer)"
+    r"\s*(?:is|:|-)?\s*([ABCD])\s*[\.\)]?\s*$",
+    re.IGNORECASE,
+)
+
+
 def parse_answer_letter(raw_response: str) -> str | None:
     """Parse the model's chosen letter (A-D) out of its raw response.
 
-    TODO(P18-HARNESS-3): implement. Prefer an explicit uppercase A-D; tolerate
-      "Answer: x" style prefixes. Return None when no letter can be found (the caller
-      treats that as a parse failure and retries once).
+    Keep this deliberately constrained: long explanations are treated as parse failures
+    so the frozen harness remains a stable multiple-choice function.
     """
-    raise NotImplementedError("answer parser not implemented yet (P18-HARNESS-3)")
+    text = raw_response.strip()
+    match = _CLEAN_LETTER_RE.fullmatch(text) or _ANSWER_PREFIX_RE.fullmatch(text)
+    if match is None:
+        return None
+    return match.group(1).upper()
