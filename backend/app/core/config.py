@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./p18_dev.db"
     ollama_base_url: str = "http://localhost:11434"
     default_model: str = "llama3.2:3b"
-    target_prompt_version: str = "target-v1-chat-nofoil"
+    target_prompt_version: str = "target-v2-chat-dynamic-choices"
     top_logprobs: int = 20
     target_num_predict: int = 4
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])

@@ -22,16 +22,16 @@ class OllamaClient:
 
         data = self._call(scenario, choices, model, settings)
         raw_response = self._content(data)
-        answer = parse_answer_letter(raw_response)
+        answer = parse_answer_letter(raw_response, choices)
 
         if answer is None:
             logger.warning(
-                "Ollama response could not be parsed as A-D; retrying once",
+                "Ollama response could not be parsed as a valid choice letter; retrying once",
                 extra={"model": model, "raw_response": raw_response},
             )
             data = self._call(scenario, choices, model, settings)
             raw_response = self._content(data)
-            answer = parse_answer_letter(raw_response)
+            answer = parse_answer_letter(raw_response, choices)
 
         if answer is None:
             logger.warning(
@@ -39,7 +39,7 @@ class OllamaClient:
                 extra={"model": model, "raw_response": raw_response},
             )
 
-        option_logprobs = extract_option_logprobs(data)
+        option_logprobs = extract_option_logprobs(data, choices)
         option_probs = option_logprobs_to_probs(option_logprobs)
         return PredictionResult(
             status="ok" if answer else "parse_failed",

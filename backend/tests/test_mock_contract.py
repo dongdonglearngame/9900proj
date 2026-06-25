@@ -19,11 +19,33 @@ REGINA = {
     "model": "mock",
 }
 
+SIX_CHOICE_SCENARIO = {
+    "question_id": "q_dynamic_001",
+    "scenario": "Someone texts in the early evening asking for emotional support.",
+    "choices": {
+        "A": "Ignore the message",
+        "B": "Send a short reply later",
+        "C": "Offer to listen and stay present",
+        "D": "Tell them to solve it alone",
+        "E": "Change the subject",
+        "F": "Block the contact",
+    },
+    "model": "mock",
+}
+
 
 def test_predict_returns_a_letter() -> None:
     response = TestClient(app).post("/predict", json=REGINA)
     assert response.status_code == 200
     assert response.json()["answer"] in {"A", "B", "C", "D"}
+
+
+def test_predict_accepts_six_choice_payloads() -> None:
+    response = TestClient(app).post("/predict", json=SIX_CHOICE_SCENARIO)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["answer"] == "C"
+    assert set(body["option_logprobs"]) == set(SIX_CHOICE_SCENARIO["choices"])
 
 
 def test_counterfactual_mock_flow_completes() -> None:
@@ -38,6 +60,19 @@ def test_counterfactual_mock_flow_completes() -> None:
     # mock placeholder flips Regina A -> C so the explanation view is demoable
     assert job["result"]["status"] == "success"
     assert job["result"]["new_answer"] == "C"
+
+
+def test_counterfactual_rejects_answers_outside_choices() -> None:
+    response = TestClient(app).post(
+        "/counterfactual",
+        json={
+            **SIX_CHOICE_SCENARIO,
+            "original_answer": "A",
+            "foil": "G",
+            "strategy_id": "s1_word_greedy",
+        },
+    )
+    assert response.status_code == 422
 
 
 def test_unknown_job_returns_404() -> None:

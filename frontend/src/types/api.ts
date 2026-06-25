@@ -1,6 +1,10 @@
-export type ChoiceLetter = "A" | "B" | "C" | "D";
-export type ChoiceMap = Record<ChoiceLetter, string>;
-export type OptionScoreMap = Record<ChoiceLetter, number | null>;
+export type ChoiceLetter = string;
+export type ChoiceMap = Record<string, string>;
+export type OptionScoreMap = Record<string, number | null>;
+
+export function choiceLetters(choices: ChoiceMap): ChoiceLetter[] {
+  return Object.keys(choices).sort((left, right) => left.localeCompare(right));
+}
 
 export interface ModelInfo {
   id: string;

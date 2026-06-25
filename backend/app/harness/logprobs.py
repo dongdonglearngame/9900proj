@@ -1,21 +1,19 @@
 from math import exp
 from typing import Any
 
-from app.harness.target_predict import ChoiceLetter
-
-CHOICES: tuple[ChoiceLetter, ...] = ("A", "B", "C", "D")
+from app.schemas.common import ChoiceMap, OptionScoreMap, ordered_choice_letters
 
 
 def normalize_token(token: str) -> str:
     return token.strip().upper()
 
 
-def empty_option_scores() -> dict[ChoiceLetter, float | None]:
-    return {letter: None for letter in CHOICES}
+def empty_option_scores(choices: ChoiceMap) -> OptionScoreMap:
+    return {letter: None for letter in ordered_choice_letters(choices)}
 
 
-def extract_option_logprobs(payload: dict[str, Any]) -> dict[ChoiceLetter, float | None]:
-    scores = empty_option_scores()
+def extract_option_logprobs(payload: dict[str, Any], choices: ChoiceMap) -> OptionScoreMap:
+    scores = empty_option_scores(choices)
     for candidates in _iter_top_logprob_candidates(payload):
         for candidate in candidates:
             token = normalize_token(str(candidate.get("token", "")))
@@ -36,8 +34,8 @@ def extract_option_logprobs(payload: dict[str, Any]) -> dict[ChoiceLetter, float
 
 
 def option_logprobs_to_probs(
-    option_logprobs: dict[ChoiceLetter, float | None],
-) -> dict[ChoiceLetter, float | None]:
+    option_logprobs: OptionScoreMap,
+) -> OptionScoreMap:
     return {
         letter: round(exp(value), 6) if value is not None else None
         for letter, value in option_logprobs.items()

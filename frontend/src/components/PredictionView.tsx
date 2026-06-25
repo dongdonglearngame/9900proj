@@ -22,7 +22,11 @@ export function PredictionView({ choices, groundTruth, prediction }: PredictionV
           <span className="readout-label">Model Predicted</span>
           <div className="answer-card">
             <span className="choice-badge">{predictedAnswer ?? "-"}</span>
-            <p>{predictedAnswer ? choices[predictedAnswer] : "Run the model to see its answer."}</p>
+            <p>
+              {predictedAnswer
+                ? (choices[predictedAnswer] ?? `Option ${predictedAnswer}`)
+                : "Run the model to see its answer."}
+            </p>
           </div>
         </article>
 
@@ -30,7 +34,7 @@ export function PredictionView({ choices, groundTruth, prediction }: PredictionV
           <span className="readout-label">Ground Truth</span>
           <div className="answer-card success-card">
             <span className="choice-badge success-badge">{groundTruth ?? "-"}</span>
-            <p>{groundTruth ? choices[groundTruth] : "Hidden until prediction completes."}</p>
+            <p>{groundTruth ? (choices[groundTruth] ?? `Option ${groundTruth}`) : "Hidden until prediction completes."}</p>
           </div>
         </article>
       </div>

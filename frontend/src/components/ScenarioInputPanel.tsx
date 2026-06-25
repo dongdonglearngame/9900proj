@@ -1,6 +1,4 @@
-import type { ChoiceLetter, ChoiceMap, ScenarioItem } from "../types/api";
-
-const choiceLetters: ChoiceLetter[] = ["A", "B", "C", "D"];
+import { choiceLetters, type ChoiceMap, type ScenarioItem } from "../types/api";
 
 interface ScenarioInputPanelProps {
   scenario: ScenarioItem;
@@ -15,6 +13,8 @@ export function ScenarioInputPanel({
   choices,
   onScenarioTextChange,
 }: ScenarioInputPanelProps) {
+  const letters = choiceLetters(choices);
+
   return (
     <section className="panel">
       <div className="section-heading split-heading">
@@ -44,7 +44,7 @@ export function ScenarioInputPanel({
       <div className="readout-block">
         <span>Candidate Choices</span>
         <div className="choices-list">
-          {choiceLetters.map((letter) => (
+          {letters.map((letter) => (
             <div className="choice-card" key={letter}>
               <span className="choice-badge">{letter}</span>
               <p>{choices[letter]}</p>
