@@ -1,4 +1,4 @@
-from app.schemas.common import APIModel, ChoiceLetter, ChoiceMap
+from app.schemas.common import APIModel
 
 
 class ScenarioItem(APIModel):
@@ -9,8 +9,8 @@ class ScenarioItem(APIModel):
     subject: str | None = None
     scenario: str
     question_text: str | None = None
-    choices: ChoiceMap
-    label: ChoiceLetter | None = None
+    choices: dict[str, str]
+    label: str | None = None
 
 
 class ScenariosResponse(APIModel):
