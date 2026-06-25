@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+from collections.abc import Callable
 from time import perf_counter
 from uuid import uuid4
 
@@ -36,9 +39,18 @@ class CounterfactualRunContext:
         self.search_calls = 0
         self.postprocess_calls = 0
         self.proposer_calls = 0
+        self._update_hook: Callable[CounterfactualRunContext, None] | None = None
+
+    def set_update_hook(self, update_hook: Callable[CounterfactualRunContext, None]) -> None:
+        self._update_hook = update_hook
+
+    def _notify(self) -> None:
+        if self._update_hook is not None:
+            self._update_hook(self)
 
     def set_phase(self, phase: str) -> None:
         self.phase = phase
+        self._notify()
 
     def target_predict(
         self, scenario: str, choices: dict[str, str], model: str
@@ -47,12 +59,15 @@ class CounterfactualRunContext:
             self.postprocess_calls += 1
         else:
             self.search_calls += 1
-        return self.prediction_service.target_predict(
+        prediction = self.prediction_service.target_predict(
             scenario=scenario, choices=choices, model=model
         )
+        self._notify()
+        return prediction
 
     def record_proposer_call(self) -> None:
         self.proposer_calls += 1
+        self._notify()
 
     def progress(self) -> CounterfactualProgress:
         return CounterfactualProgress(
@@ -65,6 +80,15 @@ class CounterfactualRunContext:
 
 class CounterfactualService:
     """Orchestrates counterfactual jobs through the strategy registry."""
+
+    _PHASE_MESSAGES = {
+        "queued": "queued",
+        "search": "testing candidate edits",
+        "postprocess": "finalizing selected edit",
+        "metrics": "scoring counterfactual result",
+        "done": None,
+        "failed": None,
+    }
 
     def __init__(self) -> None:
         self._job_repo = JobRepository()
@@ -98,16 +122,10 @@ class CounterfactualService:
     def run_job(self, job_id: str, request: CounterfactualCreateRequest) -> None:
         started = perf_counter()
         context = CounterfactualRunContext(self._prediction_service, request.budget)
-        self._job_repo.set(
-            CounterfactualJobResponse(
-                job_id=job_id,
-                status="running",
-                phase="search",
-                progress=context.progress(),
-                result=None,
-                message="testing candidate edits",
-            )
+        context.set_update_hook(
+            lambda updated_context: self._publish_running_job(job_id, updated_context)
         )
+        self._publish_running_job(job_id, context)
 
         try:
             original_prediction = self._original_snapshot(request)
@@ -164,6 +182,18 @@ class CounterfactualService:
                     message=str(exc),
                 )
             )
+
+    def _publish_running_job(self, job_id: str, context: CounterfactualRunContext) -> None:
+        self._job_repo.set(
+            CounterfactualJobResponse(
+                job_id=job_id,
+                status="running",
+                phase=context.phase,
+                progress=context.progress(),
+                result=None,
+                message=self._PHASE_MESSAGES.get(context.phase),
+            )
+        )
 
     def _original_snapshot(self, request: CounterfactualCreateRequest) -> PredictionSnapshot:
         prediction = self._prediction_service.target_predict(
