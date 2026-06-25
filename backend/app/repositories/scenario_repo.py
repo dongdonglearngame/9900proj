@@ -1,4 +1,5 @@
 import json
+import logging
 from collections.abc import Callable, Generator
 
 from sqlalchemy.exc import SQLAlchemyError
@@ -9,9 +10,9 @@ from app.db.models import ScenarioItem as ScenarioItemRecord
 from app.db.session import get_session
 from app.schemas.scenario import ScenarioItem, ScenariosResponse
 
-# Built-in mock scenarios so the app is demoable before EmoBench is loaded.
-# TODO(P18-DATA-1/2): read scenarios from the scenario_items + questions tables instead
-# (join + task_type/dimension filters + real total), falling back to these when empty.
+logger = logging.getLogger(__name__)
+
+# Built-in mock scenarios used only when the SQLite-backed scenario tables are empty.
 MOCK_SCENARIOS = [
     ScenarioItem(
         question_id="q_regina_001",
@@ -120,6 +121,7 @@ class ScenarioRepository:
             total = session.exec(count_query).one()
             rows = session.exec(base.offset(offset).limit(limit)).all()
         except SQLAlchemyError:
+            logger.exception("Failed to load scenarios from SQLite")
             return ScenariosResponse(items=[], total=0)
         finally:
             session.close()
