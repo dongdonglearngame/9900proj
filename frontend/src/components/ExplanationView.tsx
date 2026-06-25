@@ -53,7 +53,7 @@ function renderHighlightedText(
 
 function statusCopy(result: CounterfactualResult) {
   if (result.status === "success") {
-    return `Minimal scenario edit that flips the model's answer from ${result.original_answer} to ${result.foil}.`;
+    return `Candidate scenario edit that changes the model's answer from ${result.original_answer} to ${result.foil}.`;
   }
   if (result.status === "not_found") {
     return "No counterfactual scenario was found within the search budget.";
@@ -68,7 +68,7 @@ export function ExplanationView({ modelName, result }: ExplanationViewProps) {
     <section className="panel explanation-panel">
       <div className="section-heading split-heading">
         <div>
-          <h2>Step 5 - Counterfactual Explanation</h2>
+          <h2>Counterfactual Explanation</h2>
           <p>{statusCopy(result)}</p>
         </div>
         <span className="model-pill">{modelName}</span>

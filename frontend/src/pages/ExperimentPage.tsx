@@ -153,6 +153,36 @@ export function ExperimentPage() {
     setError(null);
   }
 
+  function handleModelChange(modelId: string) {
+    setSelectedModel(modelId);
+    setPrediction(null);
+    setResult(null);
+    setJob(null);
+    setError(null);
+  }
+
+  function handleStrategyChange(strategyId: string) {
+    setSelectedStrategy(strategyId);
+    setResult(null);
+    setJob(null);
+    setError(null);
+  }
+
+  function handleScenarioTextChange(nextScenarioText: string) {
+    setScenarioText(nextScenarioText);
+    setPrediction(null);
+    setResult(null);
+    setJob(null);
+    setError(null);
+  }
+
+  function handleFoilChange(nextFoil: ChoiceLetter) {
+    setFoil(nextFoil);
+    setResult(null);
+    setJob(null);
+    setError(null);
+  }
+
   async function loadExample() {
     setIsLoadingScenario(true);
     setError(null);
@@ -293,8 +323,8 @@ export function ExperimentPage() {
           strategies={strategies}
           selectedStrategy={selectedStrategy}
           onLoadExample={loadExample}
-          onModelChange={setSelectedModel}
-          onStrategyChange={setSelectedStrategy}
+          onModelChange={handleModelChange}
+          onStrategyChange={handleStrategyChange}
           onTaskTypeChange={handleTaskTypeChange}
         />
 
@@ -304,7 +334,7 @@ export function ExperimentPage() {
               choices={scenario.choices}
               scenario={scenario}
               scenarioText={scenarioText}
-              onScenarioTextChange={setScenarioText}
+              onScenarioTextChange={handleScenarioTextChange}
             />
 
             <button
@@ -333,7 +363,7 @@ export function ExperimentPage() {
               disabled={isGenerating}
               foil={foil}
               originalAnswer={prediction.answer}
-              onFoilChange={setFoil}
+              onFoilChange={handleFoilChange}
               onGenerate={generateCounterfactual}
             />
           </div>
