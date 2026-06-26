@@ -14,7 +14,7 @@ class PredictionService:
 
     The frozen invariants live in the client + harness (stateless, temperature 0, foil
     never in the prompt, argmax flip). In mock mode this uses MockLLMClient; with
-    USE_MOCK_LLM=false it uses the (still-TODO) OllamaClient.
+    USE_MOCK_LLM=false it uses OllamaClient.
     """
 
     def __init__(self) -> None:
