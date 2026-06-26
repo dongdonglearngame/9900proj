@@ -1,16 +1,25 @@
 import { choiceLetters, type ChoiceMap, type ScenarioItem } from "../types/api";
 
 interface ScenarioInputPanelProps {
+  availableScenarios: ScenarioItem[];
   scenario: ScenarioItem;
   scenarioText: string;
   choices: ChoiceMap;
+  onScenarioSelect: (questionId: string) => void;
   onScenarioTextChange: (scenarioText: string) => void;
 }
 
+function formatScenarioOption(scenario: ScenarioItem) {
+  const subject = scenario.subject?.trim() || "Unknown subject";
+  return `${scenario.question_id} | ${scenario.dimension} | ${subject}`;
+}
+
 export function ScenarioInputPanel({
+  availableScenarios,
   scenario,
   scenarioText,
   choices,
+  onScenarioSelect,
   onScenarioTextChange,
 }: ScenarioInputPanelProps) {
   const letters = choiceLetters(choices);
@@ -25,6 +34,25 @@ export function ScenarioInputPanel({
         <span className="pill">EmoBench</span>
       </div>
 
+      {availableScenarios.length > 1 ? (
+        <div className="scenario-picker-grid">
+          <label>
+            <span>Example ID</span>
+            <select
+              aria-label="Loaded EmoBench example"
+              value={scenario.question_id}
+              onChange={(event) => onScenarioSelect(event.target.value)}
+            >
+              {availableScenarios.map((item) => (
+                <option key={item.question_id} value={item.question_id}>
+                  {formatScenarioOption(item)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      ) : null}
+
       <div className="scenario-field">
         <label>
           <span>Scenario</span>
@@ -34,6 +62,16 @@ export function ScenarioInputPanel({
             onChange={(event) => onScenarioTextChange(event.target.value)}
           />
         </label>
+      </div>
+
+      <div className="readout-block">
+        <span>Question ID</span>
+        <p>{scenario.question_id}</p>
+      </div>
+
+      <div className="readout-block">
+        <span>Dimension</span>
+        <p>{scenario.dimension}</p>
       </div>
 
       <div className="readout-block">
@@ -53,7 +91,10 @@ export function ScenarioInputPanel({
         </div>
       </div>
 
-      <p className="hint-text">Choices are read-only until a prediction is made.</p>
+      <p className="hint-text">
+        Load fetches a batch of EmoBench questions for the selected task type. Switching the
+        example clears old predictions and results.
+      </p>
     </section>
   );
 }
