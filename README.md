@@ -6,6 +6,7 @@ The app is a local counterfactual explanation tool for multiple-choice emotional
 
 ## Stack
 
+- Runtime: Python 3.11+, Node.js 20+
 - Backend: FastAPI, Pydantic, SQLModel, SQLite-ready repositories
 - Frontend: Vite, React, TypeScript
 - LLM runtime: local Ollama via a frozen harness
