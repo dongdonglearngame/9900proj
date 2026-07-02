@@ -2,6 +2,8 @@
 
 FastAPI backend for the P18 counterfactual explanation tool.
 
+Requires Python 3.11+.
+
 ## Run
 
 ### Windows (PowerShell)
