@@ -7,9 +7,11 @@ from uuid import uuid4
 from app.harness.target_predict import PredictionResult
 from app.metrics.diff import word_diff
 from app.metrics.scorer import compute_counterfactual_metrics
-from app.repositories.counterfactual_repo import CounterfactualRepository
-from app.repositories.job_repo import JobRepository
-from app.repositories.metrics_repo import MetricsRepository
+from app.repositories.factory import (
+    get_counterfactual_repository,
+    get_job_repository,
+    get_metrics_repository,
+)
 from app.schemas.counterfactual import (
     CounterfactualCreateRequest,
     CounterfactualCreateResponse,
@@ -28,8 +30,7 @@ class CounterfactualRunContext:
     """Counting wrapper that a strategy's target_predict calls go through, so the job can
     report search vs post-process calls separately.
 
-    Kept as the interface for the real orchestration. TODO(P18-CF-2): also push
-    phase/progress updates to the job store as calls happen.
+    Kept as the interface for the real orchestration.
     """
 
     def __init__(self, prediction_service: PredictionService, budget: int) -> None:
@@ -91,29 +92,28 @@ class CounterfactualService:
     }
 
     def __init__(self) -> None:
-        self._job_repo = JobRepository()
-        self._counterfactual_repo = CounterfactualRepository()
-        self._metrics_repo = MetricsRepository()
+        self._job_repo = get_job_repository()
+        self._counterfactual_repo = get_counterfactual_repository()
+        self._metrics_repo = get_metrics_repository()
         self._prediction_service = get_prediction_service()
         self._postprocessor = IdentityPostProcessor()
 
     def create_job(self, request: CounterfactualCreateRequest) -> CounterfactualCreateResponse:
         job_id = f"job_{uuid4().hex[:12]}"
-        self._job_repo.create(
-            CounterfactualJobResponse(
-                job_id=job_id,
-                status="pending",
-                phase="queued",
-                progress=CounterfactualProgress(
-                    budget=request.budget,
-                    search_calls=0,
-                    postprocess_calls=0,
-                    proposer_calls=0,
-                ),
-                result=None,
-                message="queued",
-            )
+        job = CounterfactualJobResponse(
+            job_id=job_id,
+            status="pending",
+            phase="queued",
+            progress=CounterfactualProgress(
+                budget=request.budget,
+                search_calls=0,
+                postprocess_calls=0,
+                proposer_calls=0,
+            ),
+            result=None,
+            message="queued",
         )
+        self._job_repo.create(job, request=request)
         return CounterfactualCreateResponse(job_id=job_id, status="pending")
 
     def get_job(self, job_id: str) -> CounterfactualJobResponse | None:

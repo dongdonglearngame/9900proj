@@ -5,7 +5,7 @@ from app.db.hashing import prediction_cache_key
 from app.harness.target_predict import PredictionResult
 from app.llm.mock_client import MockLLMClient
 from app.llm.ollama_client import OllamaClient
-from app.repositories.prediction_repo import PredictionRepository
+from app.repositories.factory import get_prediction_repository
 from app.schemas.predict import PredictionResponse, PredictRequest
 
 
@@ -20,7 +20,7 @@ class PredictionService:
     def __init__(self) -> None:
         settings = get_settings()
         self._client = MockLLMClient() if settings.use_mock_llm else OllamaClient()
-        self._repo = PredictionRepository()
+        self._repo = get_prediction_repository()
 
     def predict(self, request: PredictRequest) -> PredictionResponse:
         result = self.target_predict(
