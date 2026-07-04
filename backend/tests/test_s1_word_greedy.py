@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 from app.harness.target_predict import PredictionResult
 from app.llm.mock_client import MockLLMClient
 from app.main import app
-from app.strategies.base import FrozenTargetModel
+from app.strategies.base import FrozenTargetModel, ProposedEdit
 from app.strategies.s1_word_greedy import S1WordGreedyStrategy
 
 CHOICES = {
@@ -12,6 +12,23 @@ CHOICES = {
     "C": "Stay up and lend a listening ear",
     "D": "Suggest her friend find a new partner",
 }
+
+
+class NoopProposer:
+    def propose(
+        self,
+        scenario: str,
+        choices: dict[str, str],
+        foil: str,
+        count: int,
+        avoid: list[str] | None = None,
+    ) -> list[ProposedEdit]:
+        _ = scenario
+        _ = choices
+        _ = foil
+        _ = count
+        _ = avoid
+        return []
 
 
 def _prediction(answer: str) -> PredictionResult:
@@ -43,6 +60,7 @@ def test_s1_finds_regina_demo_edit() -> None:
         model=model,
         foil="C",
         budget=20,
+        proposer=NoopProposer(),
     )
 
     assert result.status == "success"
@@ -69,6 +87,7 @@ def test_s1_respects_zero_budget() -> None:
         model=model,
         foil="C",
         budget=0,
+        proposer=NoopProposer(),
     )
 
     assert result.status == "not_found"
@@ -118,6 +137,7 @@ def test_s1_uses_systematic_emotion_replacement_beyond_demo_seed() -> None:
         model=model,
         foil="C",
         budget=20,
+        proposer=NoopProposer(),
     )
 
     assert result.status == "success"
@@ -141,6 +161,7 @@ def test_s1_uses_systematic_content_word_deletion() -> None:
         model=model,
         foil="C",
         budget=30,
+        proposer=NoopProposer(),
     )
 
     assert result.status == "success"
