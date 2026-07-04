@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from app.harness.target_predict import PredictionResult
-from app.repositories.scenario_repo import ScenarioRepository
+from app.repositories.factory import get_scenario_repository
 from app.schemas.scenario import ScenarioItem, ScenariosResponse
 from app.services.prediction_service import get_prediction_service
 
@@ -53,7 +53,7 @@ class EvaluationService:
         predictor: TargetPredictor | None = None,
         page_size: int = PAGE_SIZE,
     ) -> None:
-        self._scenario_source = scenario_source or ScenarioRepository()
+        self._scenario_source = scenario_source or get_scenario_repository()
         self._predictor = predictor or get_prediction_service()
         self._page_size = page_size
 

@@ -42,6 +42,9 @@ ruff check .
 - `/scenarios` falls back to built-in mock scenarios when the database is empty
 - `/predict` is served by `MockLLMClient`
 
+`REPO_BACKEND=memory` is the default storage mode. Set `REPO_BACKEND=sqlite` when
+counterfactual job checkpoints should survive a backend restart.
+
 For the local real-model setup with Ollama + EmoBench import, see
 [../docs/real-demo-mode.md](../docs/real-demo-mode.md).
 

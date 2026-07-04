@@ -1,4 +1,5 @@
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -6,6 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     app_env: str = "development"
+    repo_backend: Literal["memory", "sqlite"] = "memory"
     use_mock_llm: bool = True
     database_url: str = "sqlite:///./p18_dev.db"
     ollama_base_url: str = "http://localhost:11434"
