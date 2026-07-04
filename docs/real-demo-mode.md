@@ -37,6 +37,7 @@ Copy-Item .env.example .env
 Edit `.env` and set:
 
 ```text
+REPO_BACKEND=sqlite
 USE_MOCK_LLM=false
 DEFAULT_MODEL=llama3.2:3b
 TARGET_PROMPT_VERSION=target-v2-chat-dynamic-choices

@@ -42,6 +42,10 @@ Open:
 
 For a local real-model demo with Ollama + EmoBench, see [docs/real-demo-mode.md](docs/real-demo-mode.md).
 
+Repository storage is selected with `REPO_BACKEND=memory|sqlite`. Use `memory` for
+fast mock development and CI; use `sqlite` when job checkpoints should survive a
+backend restart.
+
 ## Development Rules
 
 - Keep `main` runnable.
