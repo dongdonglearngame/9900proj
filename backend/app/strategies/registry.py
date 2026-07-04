@@ -9,7 +9,6 @@ from app.strategies.base import CounterfactualStrategy
 _SKIP_MODULES = {"base", "registry"}
 
 PLANNED_STRATEGIES = [
-    StrategyInfo(id="s2_llm_propose_verify", name="S2 LLM Propose-Verify", available=False),
     StrategyInfo(
         id="s4_importance_infilling",
         name="S4 Importance-guided Infilling",

@@ -14,6 +14,7 @@ export function LoadingStatus({ job }: LoadingStatusProps) {
       <strong>{job.status}</strong>
       <span>Phase: {job.phase}</span>
       <span>Search calls: {job.progress.search_calls}</span>
+      <span>Proposer calls: {job.progress.proposer_calls}</span>
       {job.message ? <span>{job.message}</span> : null}
     </div>
   );

@@ -12,6 +12,7 @@ def generate(
     model: TargetModel,
     foil: str,
     budget: int,
+    proposer: Proposer,
 ) -> CounterfactualResult:
     ...
 ```
@@ -21,21 +22,32 @@ def generate(
 must not import or instantiate LLM clients, call `/predict`, build target
 prompts, change decoding settings, or pass the foil into target prediction.
 
+`proposer` is the injected generative search-agent harness. It may see the foil
+and can propose candidate scenario rewrites, but it is separate from the frozen
+target harness and must not use the prediction cache.
+
+The target (`model.target_predict`) and the proposer (`proposer.propose`) are the
+two injected search capabilities. Adding a strategy that reuses these requires no
+service or route changes. Strategies still must not import or instantiate LLM
+clients, build target prompts, change decoding, or leak the foil into the target.
+
 Required steps:
 
 1. Add `backend/app/strategies/sN_name.py`.
 2. Define a no-argument class that subclasses `CounterfactualStrategy`.
 3. Set a unique `id` and human-readable `name`.
-4. Implement `generate(scenario, choices, model, foil, budget)`.
+4. Implement `generate(scenario, choices, model, foil, budget, proposer)`.
 5. Return `CounterfactualResult` with `success`, `not_found`, or `failed`.
 6. Add focused tests.
 
 The registry auto-discovers strategy modules under `backend/app/strategies`.
-Adding a new strategy must not require changes to service or API route code.
+Adding a new strategy that uses the existing target/proposer ports must not
+require changes to service or API route code.
 
 Rules:
 
 - `model.target_predict(scenario, choices)` must be the only target-model path.
+- `proposer.propose(...)` must be the only generative proposer path.
 - The strategy may see `foil`, but the target prompt must not.
 - Respect `budget`.
 - Record failed attempts when useful.

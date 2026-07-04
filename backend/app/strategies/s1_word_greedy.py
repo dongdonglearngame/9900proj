@@ -5,6 +5,7 @@ from app.strategies.base import (
     AttemptRecord,
     CounterfactualResult,
     CounterfactualStrategy,
+    Proposer,
     TargetModel,
 )
 
@@ -158,7 +159,9 @@ class S1WordGreedyStrategy(CounterfactualStrategy):
         model: TargetModel,
         foil: str,
         budget: int,
+        proposer: Proposer,
     ) -> CounterfactualResult:
+        _ = proposer
         attempts: list[AttemptRecord] = []
         budget = max(budget, 0)
 

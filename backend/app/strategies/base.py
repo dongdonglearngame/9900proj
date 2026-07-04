@@ -21,6 +21,30 @@ class TargetModel(Protocol):
         """Run the frozen target prediction harness for one candidate scenario."""
 
 
+@dataclass(frozen=True)
+class ProposedEdit:
+    modified_scenario: str
+    rationale: str | None = None
+
+
+class Proposer(Protocol):
+    """Generative search-agent port exposed to strategies.
+
+    The proposer may see the foil. It is separate from the frozen target harness and
+    must not use the target prediction cache.
+    """
+
+    def propose(
+        self,
+        scenario: str,
+        choices: dict[str, str],
+        foil: str,
+        count: int,
+        avoid: list[str] | None = None,
+    ) -> list[ProposedEdit]:
+        """Generate candidate scenario rewrites for later target verification."""
+
+
 class FrozenTargetModel:
     """Adapter that hides the raw model client and model id from strategies."""
 
@@ -57,11 +81,11 @@ class CounterfactualResult:
 class CounterfactualStrategy(ABC):
     """Shared interface implemented by every counterfactual strategy.
 
-    `generate` receives only the immutable scenario data, the requested foil,
-    a search budget, and the frozen target-model harness. This keeps all
-    strategies comparable: the prompt template, decoding settings, caching,
-    and model id are owned by the shared harness instead of by individual
-    strategy implementations.
+    `generate` receives only the immutable scenario data, the requested foil, a
+    search budget, the frozen target-model harness, and the injected proposer
+    harness. This keeps strategies comparable: target prompt templates,
+    decoding settings, caching, and model id are owned by the shared harness
+    instead of by individual strategy implementations.
     """
 
     id: str
@@ -75,6 +99,7 @@ class CounterfactualStrategy(ABC):
         model: TargetModel,
         foil: str,
         budget: int,
+        proposer: Proposer,
     ) -> CounterfactualResult:
         """Search for a candidate scenario that makes the target model choose `foil`."""
         raise NotImplementedError

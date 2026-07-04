@@ -5,6 +5,7 @@ from app.strategies.base import (
     CounterfactualResult,
     CounterfactualStrategy,
     FrozenTargetModel,
+    Proposer,
 )
 from app.strategies.registry import get_strategy, list_strategy_infos
 
@@ -26,8 +27,10 @@ def test_strategy_interface_signature_matches_shared_contract() -> None:
         "model",
         "foil",
         "budget",
+        "proposer",
     ]
     assert generate_signature.return_annotation is CounterfactualResult
+    assert generate_signature.parameters["proposer"].annotation is Proposer
 
 
 def test_frozen_target_model_only_exposes_target_predict() -> None:
@@ -52,6 +55,14 @@ def test_frozen_target_model_only_exposes_target_predict() -> None:
 def test_registry_lists_s1() -> None:
     strategies = list_strategy_infos()
     assert any(strategy.id == "s1_word_greedy" and strategy.available for strategy in strategies)
+
+
+def test_registry_lists_s2_once_as_available() -> None:
+    strategies = list_strategy_infos()
+    s2_entries = [strategy for strategy in strategies if strategy.id == "s2_llm_propose_verify"]
+
+    assert len(s2_entries) == 1
+    assert s2_entries[0].available
 
 
 def test_registry_gets_s1() -> None:

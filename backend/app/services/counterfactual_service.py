@@ -4,9 +4,12 @@ from collections.abc import Callable
 from time import perf_counter
 from uuid import uuid4
 
+from app.core.config import get_settings
 from app.harness.target_predict import PredictionResult
 from app.metrics.diff import word_diff
 from app.metrics.scorer import compute_counterfactual_metrics
+from app.proposer.clients import MockProposerClient, OllamaProposerClient
+from app.proposer.harness import ProposerHarness
 from app.repositories.counterfactual_repo import CounterfactualRepository
 from app.repositories.job_repo import JobRepository
 from app.repositories.metrics_repo import MetricsRepository
@@ -134,6 +137,7 @@ class CounterfactualService:
                 model_id=request.model,
                 target_predict_fn=context.target_predict,
             )
+            proposer = self._build_proposer(request, context)
 
             raw_result = strategy.generate(
                 scenario=request.scenario,
@@ -141,6 +145,7 @@ class CounterfactualService:
                 model=target_model,
                 foil=request.foil,
                 budget=request.budget,
+                proposer=proposer,
             )
             context.set_phase("postprocess")
             processed_result = self._postprocessor.process(
@@ -204,6 +209,29 @@ class CounterfactualService:
         return PredictionSnapshot(
             answer=prediction.answer or request.original_answer,
             option_logprobs=prediction.option_logprobs,
+        )
+
+    def _build_proposer(
+        self,
+        request: CounterfactualCreateRequest,
+        context: CounterfactualRunContext,
+    ) -> ProposerHarness:
+        settings = get_settings()
+        client = (
+            MockProposerClient()
+            if settings.use_mock_llm
+            else OllamaProposerClient(
+                base_url=settings.ollama_base_url,
+                model=settings.proposer_model,
+            )
+        )
+        return ProposerHarness(
+            client=client,
+            original_answer=request.original_answer,
+            temperature=settings.proposer_temperature,
+            seed=settings.proposer_seed,
+            num_predict=settings.proposer_num_predict,
+            on_call=context.record_proposer_call,
         )
 
     def _build_payload(
