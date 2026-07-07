@@ -44,6 +44,17 @@ class Proposer(Protocol):
     ) -> list[ProposedEdit]:
         """Generate candidate scenario rewrites for later target verification."""
 
+    def infill(
+        self,
+        original_scenario: str,
+        masked_scenario: str,
+        choices: dict[str, str],
+        foil: str,
+        count: int,
+        avoid: list[str] | None = None,
+    ) -> list[ProposedEdit]:
+        """Fill masked scenario spans while preserving the unmasked text."""
+
 
 class FrozenTargetModel:
     """Adapter that hides the raw model client and model id from strategies."""
