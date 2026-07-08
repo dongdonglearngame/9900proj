@@ -46,7 +46,10 @@ class Prediction(SQLModel, table=True):
     model: str
     prompt_template_version: str
     endpoint_type: str
+    top_logprobs: int | None = None
+    target_num_predict: int | None = None
     answer: str | None = None
+    answer_text: str | None = None
     status: str
     raw_response: str
     option_logprobs_json: str
@@ -56,10 +59,28 @@ class Prediction(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utc_now)
 
 
+class ExperimentRun(SQLModel, table=True):
+    __tablename__ = "experiment_runs"
+
+    id: str = Field(primary_key=True)
+    name: str
+    scenario_subset_id: str | None = Field(default=None, index=True)
+    model: str = Field(index=True)
+    budget: int
+    prompt_template_version: str
+    strategy_ids_json: str
+    task_type: str | None = Field(default=None, index=True)
+    dimension: str | None = Field(default=None, index=True)
+    git_commit: str | None = Field(default=None, index=True)
+    notes: str | None = None
+    created_at: datetime = Field(default_factory=utc_now)
+
+
 class CounterfactualJob(SQLModel, table=True):
     __tablename__ = "counterfactual_jobs"
 
     id: str = Field(primary_key=True)
+    experiment_run_id: str | None = Field(default=None, index=True)
     status: str = Field(index=True)
     phase: str
     strategy_id: str = Field(index=True)
@@ -80,6 +101,7 @@ class Counterfactual(SQLModel, table=True):
     __tablename__ = "counterfactuals"
 
     id: str = Field(primary_key=True)
+    experiment_run_id: str | None = Field(default=None, index=True)
     job_id: str = Field(index=True)
     question_id: str | None = Field(default=None, index=True)
     strategy_id: str = Field(index=True)
@@ -103,6 +125,7 @@ class Metric(SQLModel, table=True):
     __tablename__ = "metrics"
 
     id: str = Field(primary_key=True)
+    experiment_run_id: str | None = Field(default=None, index=True)
     counterfactual_id: str = Field(index=True)
     strategy_id: str = Field(index=True)
     flip_success: bool
