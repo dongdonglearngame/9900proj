@@ -9,11 +9,13 @@ from app.db.init_db import init_db
 from app.db.session import get_session
 from app.repositories.checkpointing_job_repo import CheckpointingJobRepository
 from app.repositories.counterfactual_repo import CounterfactualRepository
+from app.repositories.experiment_run_repo import ExperimentRunRepository
 from app.repositories.job_repo import JobRepository
 from app.repositories.metrics_repo import MetricsRepository
 from app.repositories.prediction_repo import PredictionRepository
 from app.repositories.scenario_repo import ScenarioRepository
 from app.repositories.sqlite_job_repo import SQLiteJobRepository
+from app.repositories.sqlite_prediction_repo import SQLitePredictionRepository
 
 RepoBackend = Literal["memory", "sqlite"]
 
@@ -36,8 +38,18 @@ class RepositoryFactory:
             init_db()
 
     def get_prediction_repository(self) -> PredictionRepository:
-        # P18-12 will replace this with SQLitePredictionRepository.
+        if self._repo_backend == "sqlite":
+            return self._get(
+                "prediction",
+                lambda: SQLitePredictionRepository(session_factory=self._session_factory),
+            )
         return self._get("prediction", PredictionRepository)
+
+    def get_experiment_run_repository(self) -> ExperimentRunRepository:
+        return self._get(
+            "experiment_run",
+            lambda: ExperimentRunRepository(session_factory=self._session_factory),
+        )
 
     def get_job_repository(self) -> JobRepository | CheckpointingJobRepository:
         if self._repo_backend == "sqlite":
@@ -81,6 +93,11 @@ def get_prediction_repository() -> PredictionRepository:
 
 
 @lru_cache
+def get_experiment_run_repository() -> ExperimentRunRepository:
+    return get_repository_factory().get_experiment_run_repository()
+
+
+@lru_cache
 def get_job_repository() -> JobRepository | CheckpointingJobRepository:
     return get_repository_factory().get_job_repository()
 
@@ -102,6 +119,7 @@ def get_scenario_repository() -> ScenarioRepository:
 
 def clear_repository_caches() -> None:
     get_prediction_repository.cache_clear()
+    get_experiment_run_repository.cache_clear()
     get_job_repository.cache_clear()
     get_counterfactual_repository.cache_clear()
     get_metrics_repository.cache_clear()

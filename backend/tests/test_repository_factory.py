@@ -6,6 +6,7 @@ from app.db.session import create_configured_engine
 from app.repositories.checkpointing_job_repo import CheckpointingJobRepository
 from app.repositories.factory import RepositoryFactory
 from app.repositories.job_repo import JobRepository
+from app.repositories.sqlite_prediction_repo import SQLitePredictionRepository
 
 
 def test_memory_factory_reuses_repository_instances() -> None:
@@ -34,3 +35,4 @@ def test_sqlite_factory_wraps_jobs_with_checkpointing_repo(tmp_path) -> None:
     job_repo = factory.get_job_repository()
     assert isinstance(job_repo, CheckpointingJobRepository)
     assert job_repo is factory.get_job_repository()
+    assert isinstance(factory.get_prediction_repository(), SQLitePredictionRepository)
