@@ -163,6 +163,7 @@ class CounterfactualService:
                 runtime_seconds=round(perf_counter() - started, 4),
                 original_prediction=original_prediction,
                 original_answer=request.original_answer,
+                experiment_run_id=request.experiment_run_id,
             )
             self._counterfactual_repo.add(payload)
             self._metrics_repo.add(payload.metrics)
@@ -242,6 +243,7 @@ class CounterfactualService:
         runtime_seconds: float,
         original_prediction: PredictionSnapshot,
         original_answer: str,
+        experiment_run_id: str | None,
     ) -> CounterfactualResultPayload:
         successful_attempt = next((attempt for attempt in result.attempts if attempt.success), None)
         new_prediction = None
@@ -260,9 +262,11 @@ class CounterfactualService:
             proposer_calls=context.proposer_calls,
             runtime_seconds=runtime_seconds,
         )
+        metrics = metrics.model_copy(update={"experiment_run_id": experiment_run_id})
 
         return CounterfactualResultPayload(
             status=result.status,
+            experiment_run_id=experiment_run_id,
             strategy_id=result.strategy_id,
             original_answer=original_answer,
             foil=result.foil,

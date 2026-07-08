@@ -26,6 +26,7 @@ class StrategyListResponse(APIModel):
 
 class CounterfactualCreateRequest(APIModel):
     question_id: str | None = None
+    experiment_run_id: str | None = None
     scenario: str
     choices: ChoiceMap
     model: str
@@ -73,6 +74,7 @@ class DiffSpan(APIModel):
 
 class CounterfactualResultPayload(APIModel):
     status: Literal["success", "not_found", "failed"]
+    experiment_run_id: str | None = None
     strategy_id: str
     original_answer: ChoiceLetter
     foil: ChoiceLetter
