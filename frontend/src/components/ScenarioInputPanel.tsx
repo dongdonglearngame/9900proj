@@ -5,6 +5,9 @@ interface ScenarioInputPanelProps {
   scenario: ScenarioItem;
   scenarioText: string;
   choices: ChoiceMap;
+  title?: string;
+  description?: string;
+  badge?: string;
   onScenarioSelect: (questionId: string) => void;
   onScenarioTextChange: (scenarioText: string) => void;
 }
@@ -19,6 +22,9 @@ export function ScenarioInputPanel({
   scenario,
   scenarioText,
   choices,
+  title = "Step 2 - Benchmark Scenario",
+  description = "Read-only. Ground truth is hidden until the model runs.",
+  badge = "EmoBench",
   onScenarioSelect,
   onScenarioTextChange,
 }: ScenarioInputPanelProps) {
@@ -28,10 +34,10 @@ export function ScenarioInputPanel({
     <section className="panel">
       <div className="section-heading split-heading">
         <div>
-          <h2>Step 2 - Benchmark Scenario</h2>
-          <p>Read-only. Ground truth is hidden until the model runs.</p>
+          <h2>{title}</h2>
+          <p>{description}</p>
         </div>
-        <span className="pill">EmoBench</span>
+        <span className="pill">{badge}</span>
       </div>
 
       {availableScenarios.length > 1 ? (

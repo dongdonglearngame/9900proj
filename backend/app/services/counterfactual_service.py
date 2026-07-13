@@ -123,7 +123,6 @@ class CounterfactualService:
         return self._job_repo.get(job_id)
 
     def run_job(self, job_id: str, request: CounterfactualCreateRequest) -> None:
-        started = perf_counter()
         context = CounterfactualRunContext(self._prediction_service, request.budget)
         context.set_update_hook(
             lambda updated_context: self._publish_running_job(job_id, updated_context)
@@ -131,39 +130,7 @@ class CounterfactualService:
         self._publish_running_job(job_id, context)
 
         try:
-            original_prediction = self._original_snapshot(request)
-            strategy = get_strategy(request.strategy_id)
-            target_model = FrozenTargetModel(
-                model_id=request.model,
-                target_predict_fn=context.target_predict,
-            )
-            proposer = self._build_proposer(request, context)
-
-            raw_result = strategy.generate(
-                scenario=request.scenario,
-                choices=request.choices,
-                model=target_model,
-                foil=request.foil,
-                budget=request.budget,
-                proposer=proposer,
-            )
-            context.set_phase("postprocess")
-            processed_result = self._postprocessor.process(
-                raw_result,
-                scenario=request.scenario,
-                choices=request.choices,
-                model=target_model,
-                foil=request.foil,
-                budget=request.budget,
-            )
-            context.set_phase("metrics")
-            payload = self._build_payload(
-                result=processed_result,
-                context=context,
-                runtime_seconds=round(perf_counter() - started, 4),
-                original_prediction=original_prediction,
-                original_answer=request.original_answer,
-            )
+            payload = self._run_with_context(request, context)
             self._counterfactual_repo.add(payload)
             self._metrics_repo.add(payload.metrics)
             self._job_repo.set(
@@ -187,6 +154,51 @@ class CounterfactualService:
                     message=str(exc),
                 )
             )
+
+    def run_once(self, request: CounterfactualCreateRequest) -> CounterfactualResultPayload:
+        """Run one counterfactual search synchronously for batch comparison."""
+        context = CounterfactualRunContext(self._prediction_service, request.budget)
+        return self._run_with_context(request, context)
+
+    def _run_with_context(
+        self,
+        request: CounterfactualCreateRequest,
+        context: CounterfactualRunContext,
+    ) -> CounterfactualResultPayload:
+        started = perf_counter()
+        original_prediction = self._original_snapshot(request)
+        strategy = get_strategy(request.strategy_id)
+        target_model = FrozenTargetModel(
+            model_id=request.model,
+            target_predict_fn=context.target_predict,
+        )
+        proposer = self._build_proposer(request, context)
+
+        raw_result = strategy.generate(
+            scenario=request.scenario,
+            choices=request.choices,
+            model=target_model,
+            foil=request.foil,
+            budget=request.budget,
+            proposer=proposer,
+        )
+        context.set_phase("postprocess")
+        processed_result = self._postprocessor.process(
+            raw_result,
+            scenario=request.scenario,
+            choices=request.choices,
+            model=target_model,
+            foil=request.foil,
+            budget=request.budget,
+        )
+        context.set_phase("metrics")
+        return self._build_payload(
+            result=processed_result,
+            context=context,
+            runtime_seconds=round(perf_counter() - started, 4),
+            original_prediction=original_prediction,
+            original_answer=request.original_answer,
+        )
 
     def _publish_running_job(self, job_id: str, context: CounterfactualRunContext) -> None:
         self._job_repo.set(
