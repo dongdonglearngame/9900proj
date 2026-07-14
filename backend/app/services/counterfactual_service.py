@@ -131,8 +131,7 @@ class CounterfactualService:
 
         try:
             payload = self._run_with_context(request, context)
-            self._counterfactual_repo.add(payload)
-            self._metrics_repo.add(payload.metrics)
+            self._store_payload(payload)
             self._job_repo.set(
                 CounterfactualJobResponse(
                     job_id=job_id,
@@ -158,7 +157,13 @@ class CounterfactualService:
     def run_once(self, request: CounterfactualCreateRequest) -> CounterfactualResultPayload:
         """Run one counterfactual search synchronously for batch comparison."""
         context = CounterfactualRunContext(self._prediction_service, request.budget)
-        return self._run_with_context(request, context)
+        payload = self._run_with_context(request, context)
+        self._store_payload(payload)
+        return payload
+
+    def _store_payload(self, payload: CounterfactualResultPayload) -> None:
+        self._counterfactual_repo.add(payload)
+        self._metrics_repo.add(payload.metrics)
 
     def _run_with_context(
         self,
@@ -198,6 +203,7 @@ class CounterfactualService:
             runtime_seconds=round(perf_counter() - started, 4),
             original_prediction=original_prediction,
             original_answer=request.original_answer,
+            experiment_run_id=request.experiment_run_id,
         )
 
     def _publish_running_job(self, job_id: str, context: CounterfactualRunContext) -> None:
@@ -254,6 +260,7 @@ class CounterfactualService:
         runtime_seconds: float,
         original_prediction: PredictionSnapshot,
         original_answer: str,
+        experiment_run_id: str | None,
     ) -> CounterfactualResultPayload:
         successful_attempt = next((attempt for attempt in result.attempts if attempt.success), None)
         new_prediction = None
@@ -272,9 +279,11 @@ class CounterfactualService:
             proposer_calls=context.proposer_calls,
             runtime_seconds=runtime_seconds,
         )
+        metrics = metrics.model_copy(update={"experiment_run_id": experiment_run_id})
 
         return CounterfactualResultPayload(
             status=result.status,
+            experiment_run_id=experiment_run_id,
             strategy_id=result.strategy_id,
             original_answer=original_answer,
             foil=result.foil,

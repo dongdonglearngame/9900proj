@@ -4,6 +4,7 @@ from copy import deepcopy
 import pytest
 from sqlmodel import Session, SQLModel
 
+from app.db.models import CounterfactualJob as CounterfactualJobRecord
 from app.db.session import create_configured_engine
 from app.repositories.checkpointing_job_repo import CheckpointingJobRepository
 from app.repositories.job_repo import JobRepository
@@ -18,6 +19,7 @@ from app.schemas.counterfactual import (
 def make_request() -> CounterfactualCreateRequest:
     return CounterfactualCreateRequest(
         question_id="q1",
+        experiment_run_id="run_demo_b",
         scenario="Regina is worried about her friend.",
         choices={
             "A": "Ignore the friend",
@@ -79,10 +81,15 @@ def test_sqlite_engine_uses_wal_for_file_databases(sqlite_session_factory) -> No
 
 
 def test_sqlite_job_repository_round_trips_job_checkpoints(sqlite_session_factory) -> None:
-    _engine, factory = sqlite_session_factory
+    engine, factory = sqlite_session_factory
     repo = SQLiteJobRepository(session_factory=factory)
 
     repo.create(make_job(), request=make_request())
+    with Session(engine) as session:
+        record = session.get(CounterfactualJobRecord, "job_test")
+        assert record is not None
+        assert record.experiment_run_id == "run_demo_b"
+
     repo.set(make_job(status="running", phase="search", search_calls=3, message="testing"))
     running = repo.get("job_test")
 

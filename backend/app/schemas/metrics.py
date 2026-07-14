@@ -2,6 +2,7 @@ from app.schemas.common import APIModel
 
 
 class CounterfactualMetrics(APIModel):
+    experiment_run_id: str | None = None
     flip_success: bool
     token_edit_distance: int | None
     changed_word_fraction: float | None

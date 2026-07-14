@@ -7,7 +7,7 @@ teammates who have Ollama installed and have downloaded EmoBench locally.
 
 - Python 3.11+
 - Node.js 20+
-- Ollama installed locally
+- Ollama 0.12.11 or newer installed locally
 - `llama3.2:3b` pulled into Ollama
 - EmoBench JSONL files downloaded into `data/raw/`
 
@@ -53,6 +53,19 @@ ollama pull llama3.2:3b
 ```
 
 If `ollama serve` is already running in the background, only the `pull` step is needed.
+
+Before running S4 Importance-guided Infilling, verify that the local Ollama build and
+model expose option logprobs through the frozen target harness. From `backend/` run:
+
+```powershell
+python -m app.scripts.check_ollama_logprobs --model llama3.2:3b
+```
+
+The command exits with an error when Ollama is older than 0.12.11 or either probe
+choice has no logprob. S4 records `foil_logprob_delta` as its scoring mode when the
+required scores are available. Individual occlusion responses with missing scores use
+the explicit `answer_change_fallback` mode instead; this fallback keeps the strategy
+operational but should be reported when comparing strategies.
 
 ## 3. Import EmoBench into SQLite
 
