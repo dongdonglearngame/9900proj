@@ -9,7 +9,10 @@ from app.db.init_db import init_db
 from app.db.session import get_session
 from app.repositories.checkpointing_job_repo import CheckpointingJobRepository
 from app.repositories.counterfactual_repo import CounterfactualRepository
-from app.repositories.experiment_run_repo import ExperimentRunRepository
+from app.repositories.experiment_run_repo import (
+    ExperimentRunRepository,
+    InMemoryExperimentRunRepository,
+)
 from app.repositories.job_repo import JobRepository
 from app.repositories.metrics_repo import MetricsRepository
 from app.repositories.prediction_repo import PredictionRepository
@@ -45,10 +48,17 @@ class RepositoryFactory:
             )
         return self._get("prediction", PredictionRepository)
 
-    def get_experiment_run_repository(self) -> ExperimentRunRepository:
+    def get_experiment_run_repository(
+        self,
+    ) -> ExperimentRunRepository | InMemoryExperimentRunRepository:
+        if self._repo_backend == "sqlite":
+            return self._get(
+                "experiment_run",
+                lambda: ExperimentRunRepository(session_factory=self._session_factory),
+            )
         return self._get(
             "experiment_run",
-            lambda: ExperimentRunRepository(session_factory=self._session_factory),
+            InMemoryExperimentRunRepository,
         )
 
     def get_job_repository(self) -> JobRepository | CheckpointingJobRepository:
@@ -93,7 +103,7 @@ def get_prediction_repository() -> PredictionRepository:
 
 
 @lru_cache
-def get_experiment_run_repository() -> ExperimentRunRepository:
+def get_experiment_run_repository() -> ExperimentRunRepository | InMemoryExperimentRunRepository:
     return get_repository_factory().get_experiment_run_repository()
 
 

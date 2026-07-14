@@ -1,6 +1,7 @@
 import json
 from collections.abc import Callable, Generator, Iterator
 from contextlib import contextmanager
+from copy import deepcopy
 from uuid import uuid4
 
 from sqlmodel import Session
@@ -65,3 +66,44 @@ class ExperimentRunRepository:
         finally:
             session.close()
             session_iterator.close()
+
+
+class InMemoryExperimentRunRepository:
+    """In-memory run metadata store for memory backend tests and local workflows."""
+
+    def __init__(self) -> None:
+        self._runs: dict[str, ExperimentRun] = {}
+
+    def create(
+        self,
+        *,
+        name: str,
+        model: str,
+        budget: int,
+        prompt_template_version: str,
+        strategy_ids: list[str],
+        scenario_subset_id: str | None = None,
+        task_type: str | None = None,
+        dimension: str | None = None,
+        git_commit: str | None = None,
+        notes: str | None = None,
+    ) -> ExperimentRun:
+        record = ExperimentRun(
+            id=str(uuid4()),
+            name=name,
+            scenario_subset_id=scenario_subset_id,
+            model=model,
+            budget=budget,
+            prompt_template_version=prompt_template_version,
+            strategy_ids_json=json.dumps(strategy_ids, sort_keys=True),
+            task_type=task_type,
+            dimension=dimension,
+            git_commit=git_commit if git_commit is not None else get_git_commit(),
+            notes=notes,
+        )
+        self._runs[record.id] = deepcopy(record)
+        return deepcopy(record)
+
+    def get(self, run_id: str) -> ExperimentRun | None:
+        record = self._runs.get(run_id)
+        return deepcopy(record) if record else None
