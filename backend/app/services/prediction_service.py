@@ -48,6 +48,7 @@ class PredictionService:
             endpoint_type=self._endpoint_type,
             top_logprobs=settings.top_logprobs,
             target_num_predict=settings.target_num_predict,
+            target_temperature=settings.target_temperature,
         )
         cached = self._repo.get(cache_key)
         if cached:
@@ -63,6 +64,7 @@ class PredictionService:
             endpoint_type=self._endpoint_type,
             top_logprobs=settings.top_logprobs,
             target_num_predict=settings.target_num_predict,
+            target_temperature=settings.target_temperature,
         )
         return result
 

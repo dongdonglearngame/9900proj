@@ -86,7 +86,12 @@ def test_init_db_migrates_existing_prediction_table(tmp_path) -> None:
             row[1] for row in connection.exec_driver_sql("PRAGMA table_info(predictions)")
         }
 
-    assert {"top_logprobs", "target_num_predict", "answer_text"} <= prediction_columns
+    assert {
+        "top_logprobs",
+        "target_num_predict",
+        "target_temperature",
+        "answer_text",
+    } <= prediction_columns
 
     def session_factory() -> Generator[Session, None, None]:
         with Session(engine) as session:

@@ -6,6 +6,7 @@ SQLITE_COLUMN_MIGRATIONS: dict[str, dict[str, str]] = {
     "predictions": {
         "top_logprobs": "INTEGER",
         "target_num_predict": "INTEGER",
+        "target_temperature": "FLOAT",
         "answer_text": "VARCHAR",
     },
     "counterfactual_jobs": {

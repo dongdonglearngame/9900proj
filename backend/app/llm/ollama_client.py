@@ -70,7 +70,7 @@ class OllamaClient:
             "logprobs": True,
             "top_logprobs": settings.top_logprobs,
             "options": {
-                "temperature": 0,
+                "temperature": settings.target_temperature,
                 "num_predict": settings.target_num_predict,
             },
         }

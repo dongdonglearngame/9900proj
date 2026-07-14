@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     target_prompt_version: str = "target-v2-chat-dynamic-choices"
     top_logprobs: int = 20
     target_num_predict: int = 4
+    target_temperature: float = 0.0
     proposer_model: str = "llama3.2:3b"
     proposer_temperature: float = 0.7
     proposer_seed: int = 0
