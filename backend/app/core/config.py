@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     proposer_num_predict: int = 512
     proposer_candidates_per_round: int = 4
     proposer_max_rounds: int = 2
+    s2_proposer_num_predict: int = 1024
+    s2_proposer_candidates_per_round: int = 4
+    s2_proposer_max_rounds: int = 2
+    s6_proposer_num_predict: int = 512
+    s6_proposer_candidates_per_round: int = 4
+    s6_proposer_max_rounds: int = 2
     proposer_max_changed_fraction: float = 0.6
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
 

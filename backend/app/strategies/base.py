@@ -25,6 +25,8 @@ class TargetModel(Protocol):
 class ProposedEdit:
     modified_scenario: str
     rationale: str | None = None
+    changed_span: str | None = None
+    change_type: str | None = None
 
 
 class Proposer(Protocol):

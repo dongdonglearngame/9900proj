@@ -91,6 +91,11 @@ class ComparisonRow(APIModel):
     total_target_calls: int
     runtime_seconds: float
     original_logprobs: OptionScoreMap
+    foil_logprob_delta: float | None = None
+    mean_foil_logprob_delta: float | None = None
+    max_foil_logprob_delta: float | None = None
+    positive_delta_rate: float | None = None
+    logprob_coverage: float | None = None
     modified_scenario: str | None = None
     message: str | None = None
     result: CounterfactualResultPayload | None = None
@@ -113,6 +118,11 @@ class ComparisonStrategySummary(APIModel):
     avg_total_target_calls: float | None
     avg_proposer_calls: float | None
     avg_runtime_seconds: float | None
+    avg_foil_logprob_delta: float | None = None
+    avg_mean_foil_logprob_delta: float | None = None
+    avg_max_foil_logprob_delta: float | None = None
+    avg_positive_delta_rate: float | None = None
+    avg_logprob_coverage: float | None = None
 
 
 class SelectedScenarioComparison(APIModel):

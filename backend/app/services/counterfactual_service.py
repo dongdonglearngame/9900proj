@@ -9,7 +9,7 @@ from app.harness.target_predict import PredictionResult
 from app.metrics.diff import word_diff
 from app.metrics.scorer import compute_counterfactual_metrics
 from app.proposer.clients import MockProposerClient, OllamaProposerClient
-from app.proposer.harness import ProposerHarness
+from app.proposer.harness import CandidateOutcome, ProposerHarness
 from app.repositories.factory import (
     get_counterfactual_repository,
     get_job_repository,
@@ -23,6 +23,7 @@ from app.schemas.counterfactual import (
     CounterfactualResultPayload,
     PredictionSnapshot,
 )
+from app.schemas.proposer import ProposerCallDiagnostics, ProposerDiagnostics
 from app.services.postprocessor import IdentityPostProcessor
 from app.services.prediction_service import PredictionService, get_prediction_service
 from app.strategies.base import CounterfactualResult, FrozenTargetModel
@@ -43,6 +44,10 @@ class CounterfactualRunContext:
         self.search_calls = 0
         self.postprocess_calls = 0
         self.proposer_calls = 0
+        self._proposer_call_diagnostics: list[ProposerCallDiagnostics] = []
+        self._unique_valid_candidates = 0
+        self._target_verified_candidates = 0
+        self._guard_rejections: dict[str, int] = {}
         self._update_hook: Callable[CounterfactualRunContext, None] | None = None
 
     def set_update_hook(self, update_hook: Callable[CounterfactualRunContext, None]) -> None:
@@ -72,6 +77,52 @@ class CounterfactualRunContext:
     def record_proposer_call(self) -> None:
         self.proposer_calls += 1
         self._notify()
+
+    def record_proposer_diagnostics(self, diagnostics: ProposerCallDiagnostics) -> None:
+        self._proposer_call_diagnostics.append(diagnostics)
+
+    def record_candidate_outcome(self, outcome: CandidateOutcome) -> None:
+        if outcome == "unique_valid":
+            self._unique_valid_candidates += 1
+        elif outcome == "target_verified":
+            self._target_verified_candidates += 1
+        else:
+            self._guard_rejections[outcome] = self._guard_rejections.get(outcome, 0) + 1
+
+    def proposer_diagnostics(self) -> ProposerDiagnostics | None:
+        if not self._proposer_call_diagnostics and not self._guard_rejections:
+            return None
+
+        requested = sum(item.requested_candidates for item in self._proposer_call_diagnostics)
+        raw = sum(item.raw_candidates for item in self._proposer_call_diagnostics)
+        parsed = sum(item.parsed_candidates for item in self._proposer_call_diagnostics)
+        delivered = sum(
+            item.delivered_candidates for item in self._proposer_call_diagnostics
+        )
+        return ProposerDiagnostics(
+            calls=list(self._proposer_call_diagnostics),
+            requested_candidates=requested,
+            raw_candidates=raw,
+            parsed_candidates=parsed,
+            delivered_candidates=delivered,
+            unique_valid_candidates=self._unique_valid_candidates,
+            target_verified_candidates=self._target_verified_candidates,
+            guard_rejections=dict(sorted(self._guard_rejections.items())),
+            raw_requested_yield=_ratio(raw, requested),
+            parsed_raw_yield=_ratio(parsed, raw),
+            unique_valid_requested_yield=_ratio(
+                self._unique_valid_candidates,
+                requested,
+            ),
+            target_verified_parsed_yield=_ratio(
+                self._target_verified_candidates,
+                parsed,
+            ),
+            target_verified_delivered_yield=_ratio(
+                self._target_verified_candidates,
+                delivered,
+            ),
+        )
 
     def progress(self) -> CounterfactualProgress:
         return CounterfactualProgress(
@@ -248,8 +299,10 @@ class CounterfactualService:
             original_answer=request.original_answer,
             temperature=settings.proposer_temperature,
             seed=settings.proposer_seed,
-            num_predict=settings.proposer_num_predict,
+            num_predict=_proposer_num_predict(request.strategy_id),
             on_call=context.record_proposer_call,
+            on_diagnostics=context.record_proposer_diagnostics,
+            on_candidate_outcome=context.record_candidate_outcome,
         )
 
     def _build_payload(
@@ -270,6 +323,17 @@ class CounterfactualService:
                 option_logprobs=successful_attempt.prediction.option_logprobs,
             )
 
+        candidate_foil_logprobs = [
+            attempt.prediction.option_logprobs.get(result.foil)
+            for attempt in result.attempts
+            if attempt.prediction is not None
+        ]
+        selected_foil_logprob = (
+            successful_attempt.prediction.option_logprobs.get(result.foil)
+            if successful_attempt is not None and successful_attempt.prediction is not None
+            else None
+        )
+
         metrics = compute_counterfactual_metrics(
             original=result.original_scenario,
             modified=result.modified_scenario,
@@ -278,6 +342,9 @@ class CounterfactualService:
             postprocess_calls=context.postprocess_calls,
             proposer_calls=context.proposer_calls,
             runtime_seconds=runtime_seconds,
+            original_foil_logprob=original_prediction.option_logprobs.get(result.foil),
+            candidate_foil_logprobs=candidate_foil_logprobs,
+            selected_foil_logprob=selected_foil_logprob,
         )
         metrics = metrics.model_copy(update={"experiment_run_id": experiment_run_id})
 
@@ -294,5 +361,21 @@ class CounterfactualService:
             new_prediction=new_prediction,
             diff=word_diff(result.original_scenario, result.modified_scenario),
             metrics=metrics,
+            proposer_diagnostics=context.proposer_diagnostics(),
             message=result.message,
         )
+
+
+def _proposer_num_predict(strategy_id: str) -> int:
+    settings = get_settings()
+    if strategy_id == "s2_llm_propose_verify":
+        return settings.s2_proposer_num_predict
+    if strategy_id == "s6_concept_causal_editing":
+        return settings.s6_proposer_num_predict
+    return settings.proposer_num_predict
+
+
+def _ratio(numerator: int, denominator: int) -> float | None:
+    if denominator == 0:
+        return None
+    return round(numerator / denominator, 4)

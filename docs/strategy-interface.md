@@ -26,8 +26,9 @@ prompts, change decoding settings, or pass the foil into target prediction.
 and can propose candidate scenario rewrites, but it is separate from the frozen
 target harness and must not use the prediction cache.
 
-The target (`model.target_predict`) and the proposer (`proposer.propose`) are the
-two injected search capabilities. Adding a strategy that reuses these requires no
+The target (`model.target_predict`) and proposer harness methods such as
+`proposer.propose` and `proposer.infill` are the injected search capabilities. Adding
+a strategy that reuses these requires no
 service or route changes. Strategies still must not import or instantiate LLM
 clients, build target prompts, change decoding, or leak the foil into the target.
 
@@ -47,8 +48,9 @@ require changes to service or API route code.
 Rules:
 
 - `model.target_predict(scenario, choices)` must be the only target-model path.
-- `proposer.propose(...)` must be the only generative proposer path.
+- Methods exposed by the injected proposer harness must be the only generative paths.
 - The strategy may see `foil`, but the target prompt must not.
 - Respect `budget`.
 - Record failed attempts when useful.
+- Report candidate guard outcomes through the shared proposer diagnostics helper.
 - Do not compute shared metrics inside the strategy.

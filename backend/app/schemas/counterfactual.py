@@ -12,6 +12,7 @@ from app.schemas.common import (
 )
 from app.schemas.job import JobPhase, JobStatus
 from app.schemas.metrics import CounterfactualMetrics
+from app.schemas.proposer import ProposerDiagnostics
 
 
 class StrategyInfo(APIModel):
@@ -85,6 +86,7 @@ class CounterfactualResultPayload(APIModel):
     new_prediction: PredictionSnapshot | None = None
     diff: list[DiffSpan]
     metrics: CounterfactualMetrics
+    proposer_diagnostics: ProposerDiagnostics | None = None
     message: str | None = None
 
 
