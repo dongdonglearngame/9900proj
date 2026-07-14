@@ -35,13 +35,42 @@ def prediction_cache_key(
     prompt_template_version: str,
     scenario: str,
     choices: dict[str, str],
+    endpoint_type: str = "mock",
+    top_logprobs: int | None = None,
+    target_num_predict: int | None = None,
+    target_temperature: float | None = None,
 ) -> str:
     payload = "|".join(
         [
             model,
             prompt_template_version,
+            prediction_inference_signature(
+                endpoint_type=endpoint_type,
+                top_logprobs=top_logprobs,
+                target_num_predict=target_num_predict,
+                target_temperature=target_temperature,
+            ),
             normalize_scenario(scenario),
             normalize_choices_json(choices),
         ]
     )
     return _sha256(payload)
+
+
+def prediction_inference_signature(
+    *,
+    endpoint_type: str,
+    top_logprobs: int | None,
+    target_num_predict: int | None,
+    target_temperature: float | None,
+) -> str:
+    return json.dumps(
+        {
+            "endpoint_type": endpoint_type,
+            "top_logprobs": top_logprobs,
+            "target_num_predict": target_num_predict,
+            "target_temperature": target_temperature,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )

@@ -15,5 +15,5 @@ class PredictionRepository:
     def get(self, cache_key: str) -> PredictionResult | None:
         return self._cache.get(cache_key)
 
-    def set(self, cache_key: str, result: PredictionResult) -> None:
+    def set(self, cache_key: str, result: PredictionResult, **_metadata: object) -> None:
         self._cache[cache_key] = result

@@ -1,6 +1,9 @@
 from dataclasses import dataclass, replace
+from typing import Final
 
 from app.schemas.common import ChoiceLetter, OptionScoreMap
+
+TARGET_TEMPERATURE: Final = 0.0
 
 
 @dataclass(frozen=True)
