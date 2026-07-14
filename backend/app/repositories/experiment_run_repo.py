@@ -10,6 +10,34 @@ from app.db.models import ExperimentRun
 from app.db.session import get_session
 
 
+def _new_experiment_run(
+    *,
+    name: str,
+    model: str,
+    budget: int,
+    prompt_template_version: str,
+    strategy_ids: list[str],
+    scenario_subset_id: str | None,
+    task_type: str | None,
+    dimension: str | None,
+    git_commit: str | None,
+    notes: str | None,
+) -> ExperimentRun:
+    return ExperimentRun(
+        id=str(uuid4()),
+        name=name,
+        scenario_subset_id=scenario_subset_id,
+        model=model,
+        budget=budget,
+        prompt_template_version=prompt_template_version,
+        strategy_ids_json=json.dumps(strategy_ids, sort_keys=True),
+        task_type=task_type,
+        dimension=dimension,
+        git_commit=git_commit if git_commit is not None else get_git_commit(),
+        notes=notes,
+    )
+
+
 class ExperimentRunRepository:
     """Stores reproducible batch-comparison run metadata."""
 
@@ -33,17 +61,16 @@ class ExperimentRunRepository:
         git_commit: str | None = None,
         notes: str | None = None,
     ) -> ExperimentRun:
-        record = ExperimentRun(
-            id=str(uuid4()),
+        record = _new_experiment_run(
             name=name,
             scenario_subset_id=scenario_subset_id,
             model=model,
             budget=budget,
             prompt_template_version=prompt_template_version,
-            strategy_ids_json=json.dumps(strategy_ids, sort_keys=True),
+            strategy_ids=strategy_ids,
             task_type=task_type,
             dimension=dimension,
-            git_commit=git_commit if git_commit is not None else get_git_commit(),
+            git_commit=git_commit,
             notes=notes,
         )
         with self._session() as session:
@@ -65,3 +92,43 @@ class ExperimentRunRepository:
         finally:
             session.close()
             session_iterator.close()
+
+
+class MemoryExperimentRunRepository:
+    """In-memory ExperimentRun storage for mock and isolated test modes."""
+
+    def __init__(self) -> None:
+        self._runs: dict[str, ExperimentRun] = {}
+
+    def create(
+        self,
+        *,
+        name: str,
+        model: str,
+        budget: int,
+        prompt_template_version: str,
+        strategy_ids: list[str],
+        scenario_subset_id: str | None = None,
+        task_type: str | None = None,
+        dimension: str | None = None,
+        git_commit: str | None = None,
+        notes: str | None = None,
+    ) -> ExperimentRun:
+        record = _new_experiment_run(
+            name=name,
+            scenario_subset_id=scenario_subset_id,
+            model=model,
+            budget=budget,
+            prompt_template_version=prompt_template_version,
+            strategy_ids=strategy_ids,
+            task_type=task_type,
+            dimension=dimension,
+            git_commit=git_commit,
+            notes=notes,
+        )
+        self._runs[record.id] = record.model_copy(deep=True)
+        return record.model_copy(deep=True)
+
+    def get(self, run_id: str) -> ExperimentRun | None:
+        record = self._runs.get(run_id)
+        return record.model_copy(deep=True) if record else None

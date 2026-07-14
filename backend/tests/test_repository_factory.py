@@ -4,6 +4,10 @@ from sqlmodel import Session, SQLModel
 
 from app.db.session import create_configured_engine
 from app.repositories.checkpointing_job_repo import CheckpointingJobRepository
+from app.repositories.experiment_run_repo import (
+    ExperimentRunRepository,
+    MemoryExperimentRunRepository,
+)
 from app.repositories.factory import RepositoryFactory
 from app.repositories.job_repo import JobRepository
 from app.repositories.sqlite_prediction_repo import SQLitePredictionRepository
@@ -16,6 +20,17 @@ def test_memory_factory_reuses_repository_instances() -> None:
     assert factory.get_job_repository() is factory.get_job_repository()
     assert factory.get_prediction_repository() is factory.get_prediction_repository()
     assert factory.get_scenario_repository() is factory.get_scenario_repository()
+    run_repo = factory.get_experiment_run_repository()
+    assert isinstance(run_repo, MemoryExperimentRunRepository)
+    created = run_repo.create(
+        name="memory run",
+        model="mock",
+        budget=2,
+        prompt_template_version="target-v2",
+        strategy_ids=["s1_word_greedy"],
+        git_commit="abc123",
+    )
+    assert run_repo.get(created.id) == created
 
 
 def test_sqlite_factory_wraps_jobs_with_checkpointing_repo(tmp_path) -> None:
@@ -36,3 +51,4 @@ def test_sqlite_factory_wraps_jobs_with_checkpointing_repo(tmp_path) -> None:
     assert isinstance(job_repo, CheckpointingJobRepository)
     assert job_repo is factory.get_job_repository()
     assert isinstance(factory.get_prediction_repository(), SQLitePredictionRepository)
+    assert isinstance(factory.get_experiment_run_repository(), ExperimentRunRepository)

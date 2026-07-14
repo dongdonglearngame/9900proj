@@ -27,6 +27,7 @@ def test_sqlite_prediction_repository_round_trips_prediction_payload(tmp_path) -
         endpoint_type="mock",
         top_logprobs=20,
         target_num_predict=4,
+        temperature=0.0,
     )
     result = PredictionResult(
         status="ok",
@@ -52,6 +53,7 @@ def test_sqlite_prediction_repository_round_trips_prediction_payload(tmp_path) -
         endpoint_type="mock",
         top_logprobs=20,
         target_num_predict=4,
+        temperature=0.0,
     )
 
     restored = SQLitePredictionRepository(session_factory=session_factory).get(cache_key)
@@ -63,4 +65,5 @@ def test_sqlite_prediction_repository_round_trips_prediction_payload(tmp_path) -
         assert record.endpoint_type == "mock"
         assert record.top_logprobs == 20
         assert record.target_num_predict == 4
+        assert record.temperature == 0.0
         assert record.answer_text == "Listen"

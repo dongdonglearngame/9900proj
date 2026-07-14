@@ -2,7 +2,7 @@ from functools import lru_cache
 
 from app.core.config import get_settings
 from app.db.hashing import prediction_cache_key
-from app.harness.target_predict import PredictionResult
+from app.harness.target_predict import TARGET_TEMPERATURE, PredictionResult
 from app.llm.mock_client import MockLLMClient
 from app.llm.ollama_client import OllamaClient
 from app.repositories.factory import get_prediction_repository
@@ -48,6 +48,7 @@ class PredictionService:
             endpoint_type=self._endpoint_type,
             top_logprobs=settings.top_logprobs,
             target_num_predict=settings.target_num_predict,
+            temperature=TARGET_TEMPERATURE,
         )
         cached = self._repo.get(cache_key)
         if cached:
@@ -63,6 +64,7 @@ class PredictionService:
             endpoint_type=self._endpoint_type,
             top_logprobs=settings.top_logprobs,
             target_num_predict=settings.target_num_predict,
+            temperature=TARGET_TEMPERATURE,
         )
         return result
 

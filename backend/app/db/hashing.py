@@ -38,6 +38,7 @@ def prediction_cache_key(
     endpoint_type: str = "mock",
     top_logprobs: int | None = None,
     target_num_predict: int | None = None,
+    temperature: float = 0.0,
 ) -> str:
     payload = "|".join(
         [
@@ -47,6 +48,7 @@ def prediction_cache_key(
                 endpoint_type=endpoint_type,
                 top_logprobs=top_logprobs,
                 target_num_predict=target_num_predict,
+                temperature=temperature,
             ),
             normalize_scenario(scenario),
             normalize_choices_json(choices),
@@ -60,12 +62,14 @@ def prediction_inference_signature(
     endpoint_type: str,
     top_logprobs: int | None,
     target_num_predict: int | None,
+    temperature: float,
 ) -> str:
     return json.dumps(
         {
             "endpoint_type": endpoint_type,
             "top_logprobs": top_logprobs,
             "target_num_predict": target_num_predict,
+            "temperature": temperature,
         },
         sort_keys=True,
         separators=(",", ":"),
