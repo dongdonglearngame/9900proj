@@ -33,7 +33,7 @@ def _upgrade_to_experiment_runs(connection: Connection) -> None:
     prediction_columns = (
         ("top_logprobs", "INTEGER"),
         ("target_num_predict", "INTEGER"),
-        ("temperature", "FLOAT"),
+        ("target_temperature", "FLOAT"),
         ("answer_text", "VARCHAR"),
     )
     for column, sql_type in prediction_columns:

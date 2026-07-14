@@ -48,7 +48,7 @@ class Prediction(SQLModel, table=True):
     endpoint_type: str
     top_logprobs: int | None = None
     target_num_predict: int | None = None
-    temperature: float | None = None
+    target_temperature: float | None = None
     answer: str | None = None
     answer_text: str | None = None
     status: str

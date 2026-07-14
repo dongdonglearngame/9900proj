@@ -75,9 +75,12 @@ def test_init_db_migrates_sprint_one_schema_idempotently(tmp_path) -> None:
 
     inspector = inspect(engine)
     prediction_columns = {column["name"] for column in inspector.get_columns("predictions")}
-    assert {"top_logprobs", "target_num_predict", "temperature", "answer_text"} <= (
-        prediction_columns
-    )
+    assert {
+        "top_logprobs",
+        "target_num_predict",
+        "target_temperature",
+        "answer_text",
+    } <= prediction_columns
 
     for table in ("counterfactual_jobs", "counterfactuals", "metrics"):
         columns = {column["name"] for column in inspector.get_columns(table)}

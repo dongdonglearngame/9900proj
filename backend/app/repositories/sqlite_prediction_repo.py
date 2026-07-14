@@ -52,7 +52,7 @@ class SQLitePredictionRepository:
         endpoint_type: str,
         top_logprobs: int | None,
         target_num_predict: int | None,
-        temperature: float,
+        target_temperature: float | None,
     ) -> None:
         record = PredictionRecord(
             id=cache_key,
@@ -65,7 +65,7 @@ class SQLitePredictionRepository:
             endpoint_type=endpoint_type,
             top_logprobs=top_logprobs,
             target_num_predict=target_num_predict,
-            temperature=temperature,
+            target_temperature=target_temperature,
             answer=result.answer,
             answer_text=result.answer_text,
             status=result.status,
