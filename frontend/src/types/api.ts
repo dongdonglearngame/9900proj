@@ -84,6 +84,15 @@ export interface DiffSpan {
   modified: string;
 }
 
+export interface ConceptEdit {
+  concept_class: string;
+  original_span: string;
+  replacement_span: string;
+  source_value: string | null;
+  target_value: string | null;
+  rationale: string | null;
+}
+
 export interface CounterfactualMetrics {
   flip_success: boolean;
   token_edit_distance: number | null;
@@ -110,6 +119,7 @@ export interface CounterfactualResult {
   diff: DiffSpan[];
   metrics: CounterfactualMetrics;
   message: string | null;
+  concept_edit: ConceptEdit | null;
 }
 
 export interface CounterfactualJob {

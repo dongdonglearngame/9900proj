@@ -27,6 +27,16 @@ class ProposedEdit:
     rationale: str | None = None
 
 
+@dataclass(frozen=True)
+class ConceptEdit:
+    concept_class: str
+    original_span: str
+    replacement_span: str
+    source_value: str | None = None
+    target_value: str | None = None
+    rationale: str | None = None
+
+
 class Proposer(Protocol):
     """Generative search-agent port exposed to strategies.
 
@@ -43,6 +53,17 @@ class Proposer(Protocol):
         avoid: list[str] | None = None,
     ) -> list[ProposedEdit]:
         """Generate candidate scenario rewrites for later target verification."""
+
+    def propose_concept_edits(
+        self,
+        scenario: str,
+        choices: dict[str, str],
+        foil: str,
+        count: int,
+        allowed_concepts: tuple[str, ...],
+        avoid: list[str] | None = None,
+    ) -> list[ConceptEdit]:
+        """Generate single-concept span replacements for later target verification."""
 
 
 class FrozenTargetModel:
@@ -76,6 +97,7 @@ class CounterfactualResult:
     strategy_id: str
     attempts: list[AttemptRecord]
     message: str | None = None
+    concept_edit: ConceptEdit | None = None
 
 
 class CounterfactualStrategy(ABC):

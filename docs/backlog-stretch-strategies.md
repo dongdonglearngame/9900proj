@@ -4,11 +4,11 @@ These strategy ideas were moved out of the Sprint 2 mainline when P18-10/12/13
 were re-scoped to S2, persistence, and batch comparison. Keep them as future
 work; do not mix them into the current Sprint 2 tickets.
 
-## Priority stretch
+## Implemented stretch
 
-- **S6 concept-level strategy**: concept-focused scenario edits aligned with
-  EmoBench emotional reasoning dimensions. This is the preferred stretch
-  strategy because it is closest to the dataset and client story.
+- **S6 concept-level strategy**: causal-inspired, single-span edits over typed
+  emotional and situational concepts, verified through the frozen target
+  harness. Successful results expose the changed concept and exact span.
 
 ## Other stretch ideas
 

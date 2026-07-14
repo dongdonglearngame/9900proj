@@ -19,6 +19,17 @@ class MockProposerClient:
         scenario = payload.get("scenario", "")
         count = max(0, int(payload.get("count", 1)))
 
+        if payload.get("mode") == "concept_edit":
+            return json.dumps(
+                {
+                    "edits": _mock_concept_edits(
+                        str(scenario),
+                        allowed_concepts=payload.get("allowed_concepts", []),
+                        avoid=payload.get("avoid", []),
+                    )[:count]
+                }
+            )
+
         candidates = _mock_candidates(str(scenario))[:count]
         rewrites = [
             {"modified_scenario": candidate, "rationale": "mock proposer minimal time shift"}
@@ -92,6 +103,48 @@ def _mock_candidates(scenario: str) -> list[str]:
             candidates.append(f"{stripped} It is early evening.")
 
     return _dedupe_preserving_order(candidates)
+
+
+def _mock_concept_edits(
+    scenario: str,
+    *,
+    allowed_concepts: object,
+    avoid: object,
+) -> list[dict[str, str]]:
+    if not isinstance(allowed_concepts, list) or "time" not in allowed_concepts:
+        return []
+    avoided = (
+        {value for value in avoid if isinstance(value, str)}
+        if isinstance(avoid, list)
+        else set()
+    )
+    replacements = (
+        ("middle of the night", "early evening"),
+        ("late at night", "early evening"),
+        ("after midnight", "early evening"),
+        ("overnight", "during the afternoon"),
+    )
+    lower = scenario.casefold()
+    edits: list[dict[str, str]] = []
+    for source, replacement in replacements:
+        index = lower.find(source)
+        if index == -1:
+            continue
+        original = scenario[index : index + len(source)]
+        description = f"time: '{original}' -> '{replacement}'"
+        if description in avoided:
+            continue
+        edits.append(
+            {
+                "concept_class": "time",
+                "original_span": original,
+                "replacement_span": replacement,
+                "source_value": "late night",
+                "target_value": "early evening",
+                "rationale": "mock proposer single-concept time shift",
+            }
+        )
+    return edits
 
 
 def _replace_span(

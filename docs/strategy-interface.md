@@ -23,13 +23,16 @@ must not import or instantiate LLM clients, call `/predict`, build target
 prompts, change decoding settings, or pass the foil into target prediction.
 
 `proposer` is the injected generative search-agent harness. It may see the foil
-and can propose candidate scenario rewrites, but it is separate from the frozen
-target harness and must not use the prediction cache.
+and can propose either full candidate rewrites through `propose(...)` or typed,
+single-span concept interventions through `propose_concept_edits(...)`. It is
+separate from the frozen target harness and must not use the prediction cache.
 
-The target (`model.target_predict`) and the proposer (`proposer.propose`) are the
-two injected search capabilities. Adding a strategy that reuses these requires no
-service or route changes. Strategies still must not import or instantiate LLM
-clients, build target prompts, change decoding, or leak the foil into the target.
+The target (`model.target_predict`) and the methods exposed by the injected
+`proposer` harness are the two search capabilities. Adding a strategy that reuses
+these requires no new strategy dispatch or model-access path. Shared result schema
+and metadata mapping may still be extended. Strategies must not import or
+instantiate LLM clients, build target prompts, change decoding, or leak the foil
+into the target.
 
 Required steps:
 
@@ -47,8 +50,15 @@ require changes to service or API route code.
 Rules:
 
 - `model.target_predict(scenario, choices)` must be the only target-model path.
-- `proposer.propose(...)` must be the only generative proposer path.
+- `proposer.propose(...)` and `proposer.propose_concept_edits(...)` are the only
+  generative proposer paths.
 - The strategy may see `foil`, but the target prompt must not.
 - Respect `budget`.
 - Record failed attempts when useful.
 - Do not compute shared metrics inside the strategy.
+
+S6 uses causal-inspired concept interventions rather than claiming formally
+identified causal effects. Each successful S6 result carries the final concept
+class and exact source/replacement spans. A postprocessor that changes those
+spans must update the metadata or the service falls back to the verified raw
+result.

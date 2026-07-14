@@ -65,6 +65,14 @@ def test_registry_lists_s2_once_as_available() -> None:
     assert s2_entries[0].available
 
 
+def test_registry_lists_s6_once_as_available() -> None:
+    strategies = list_strategy_infos()
+    s6_entries = [strategy for strategy in strategies if strategy.id == "s6_concept_causal_editing"]
+
+    assert len(s6_entries) == 1
+    assert s6_entries[0].available
+
+
 def test_registry_gets_s1() -> None:
     strategy = get_strategy("s1_word_greedy")
 

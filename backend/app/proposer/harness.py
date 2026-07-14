@@ -1,11 +1,12 @@
-import json
-import re
 from collections.abc import Callable
 from typing import Any
 
 from app.proposer.clients import ProposerClient
+from app.proposer.concept_parser import parse_concept_edits
+from app.proposer.concept_prompts import build_concept_proposer_messages
+from app.proposer.json_utils import load_json_payload
 from app.proposer.prompts import build_proposer_messages
-from app.strategies.base import ProposedEdit
+from app.strategies.base import ConceptEdit, ProposedEdit
 
 
 class ProposerHarness:
@@ -55,11 +56,44 @@ class ProposerHarness:
             self._on_call()
         return parse_proposed_edits(raw, limit=count)
 
+    def propose_concept_edits(
+        self,
+        scenario: str,
+        choices: dict[str, str],
+        foil: str,
+        count: int,
+        allowed_concepts: tuple[str, ...],
+        avoid: list[str] | None = None,
+    ) -> list[ConceptEdit]:
+        messages = build_concept_proposer_messages(
+            scenario=scenario,
+            choices=choices,
+            foil=foil,
+            original_answer=self._original_answer,
+            count=count,
+            allowed_concepts=allowed_concepts,
+            avoid=avoid,
+        )
+        options = {
+            "temperature": self._temperature,
+            "seed": self._seed,
+            "num_predict": self._num_predict,
+        }
+        try:
+            raw = self._client.complete(messages, options)
+        finally:
+            self._on_call()
+        return parse_concept_edits(
+            raw,
+            limit=count,
+            allowed_concepts=allowed_concepts,
+        )
+
 
 def parse_proposed_edits(raw: str, *, limit: int) -> list[ProposedEdit]:
     if limit <= 0:
         return []
-    payload = _load_json_payload(raw)
+    payload = load_json_payload(raw)
     if payload is None:
         return []
 
@@ -76,31 +110,6 @@ def parse_proposed_edits(raw: str, *, limit: int) -> list[ProposedEdit]:
         if len(edits) >= limit:
             break
     return edits
-
-
-def _load_json_payload(raw: str) -> Any | None:
-    text = _strip_code_fence(raw.strip())
-    for candidate in _json_candidates(text):
-        try:
-            return json.loads(candidate)
-        except json.JSONDecodeError:
-            continue
-    return None
-
-
-def _strip_code_fence(value: str) -> str:
-    match = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", value, flags=re.IGNORECASE | re.DOTALL)
-    return match.group(1).strip() if match else value
-
-
-def _json_candidates(value: str) -> list[str]:
-    candidates = [value]
-    for opening, closing in (("{", "}"), ("[", "]")):
-        start = value.find(opening)
-        end = value.rfind(closing)
-        if start != -1 and end != -1 and end > start:
-            candidates.append(value[start : end + 1])
-    return candidates
 
 
 def _coerce_edit(item: Any) -> ProposedEdit | None:

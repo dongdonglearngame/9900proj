@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from time import perf_counter
 from uuid import uuid4
@@ -9,6 +10,7 @@ from app.harness.target_predict import PredictionResult
 from app.metrics.diff import word_diff
 from app.metrics.scorer import compute_counterfactual_metrics
 from app.proposer.clients import MockProposerClient, OllamaProposerClient
+from app.proposer.concepts import apply_concept_edit
 from app.proposer.harness import ProposerHarness
 from app.repositories.factory import (
     get_counterfactual_repository,
@@ -16,6 +18,7 @@ from app.repositories.factory import (
     get_metrics_repository,
 )
 from app.schemas.counterfactual import (
+    ConceptEditPayload,
     CounterfactualCreateRequest,
     CounterfactualCreateResponse,
     CounterfactualJobResponse,
@@ -25,8 +28,11 @@ from app.schemas.counterfactual import (
 )
 from app.services.postprocessor import IdentityPostProcessor
 from app.services.prediction_service import PredictionService, get_prediction_service
-from app.strategies.base import CounterfactualResult, FrozenTargetModel
+from app.strategies.base import ConceptEdit, CounterfactualResult, FrozenTargetModel
 from app.strategies.registry import get_strategy
+from app.strategies.s6_concept_causal_editing import STRATEGY_ID as S6_STRATEGY_ID
+
+logger = logging.getLogger(__name__)
 
 
 class CounterfactualRunContext:
@@ -156,9 +162,10 @@ class CounterfactualService:
                 foil=request.foil,
                 budget=request.budget,
             )
+            publishable_result = _select_publishable_result(raw_result, processed_result)
             context.set_phase("metrics")
             payload = self._build_payload(
-                result=processed_result,
+                result=publishable_result,
                 context=context,
                 runtime_seconds=round(perf_counter() - started, 4),
                 original_prediction=original_prediction,
@@ -274,4 +281,51 @@ class CounterfactualService:
             diff=word_diff(result.original_scenario, result.modified_scenario),
             metrics=metrics,
             message=result.message,
+            concept_edit=_build_concept_edit_payload(result.concept_edit),
         )
+
+
+def _select_publishable_result(
+    raw_result: CounterfactualResult,
+    processed_result: CounterfactualResult,
+) -> CounterfactualResult:
+    if raw_result.status != "success":
+        return processed_result
+    if raw_result.concept_edit is None:
+        if raw_result.strategy_id == S6_STRATEGY_ID:
+            raise ValueError("S6 success is missing required concept metadata")
+        return processed_result
+    if _has_consistent_concept_edit(processed_result):
+        return processed_result
+
+    logger.warning(
+        "Post-processing invalidated concept metadata; reverting to verified raw result"
+    )
+    if _has_consistent_concept_edit(raw_result):
+        return raw_result
+    raise ValueError("S6 produced inconsistent concept metadata for its verified result")
+
+
+def _has_consistent_concept_edit(result: CounterfactualResult) -> bool:
+    if result.status != "success" or result.modified_scenario is None:
+        return False
+    if result.concept_edit is None:
+        return False
+    applied = apply_concept_edit(result.original_scenario, result.concept_edit)
+    if applied is None:
+        return False
+    modified_scenario, resolved_edit = applied
+    return modified_scenario == result.modified_scenario and resolved_edit == result.concept_edit
+
+
+def _build_concept_edit_payload(edit: ConceptEdit | None) -> ConceptEditPayload | None:
+    if edit is None:
+        return None
+    return ConceptEditPayload(
+        concept_class=edit.concept_class,
+        original_span=edit.original_span,
+        replacement_span=edit.replacement_span,
+        source_value=edit.source_value,
+        target_value=edit.target_value,
+        rationale=edit.rationale,
+    )
