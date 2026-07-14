@@ -139,6 +139,7 @@ export interface ComparisonCreateRequest {
 
 export interface ComparisonCreateResponse {
   job_id: string;
+  experiment_run_id: string;
   status: "pending" | "running" | "completed" | "failed";
 }
 
@@ -152,6 +153,7 @@ export interface ComparisonProgress {
 }
 
 export interface ComparisonRow {
+  experiment_run_id: string;
   question_id: string;
   scenario_item_id: string;
   task_type: string;
@@ -180,11 +182,14 @@ export interface ComparisonRow {
 export interface ComparisonStrategySummary {
   strategy_id: string;
   runs: number;
+  attempted_count: number;
   success_count: number;
   not_found_count: number;
   failed_count: number;
   skipped_count: number;
   flip_rate: number | null;
+  coverage_rate: number | null;
+  partial_coverage: boolean;
   avg_token_edit_distance: number | null;
   median_token_edit_distance: number | null;
   avg_changed_word_fraction: number | null;
@@ -201,7 +206,21 @@ export interface SelectedScenarioComparison {
   rows: ComparisonRow[];
 }
 
+export interface ComparisonCoverage {
+  requested_scenarios: number;
+  resolved_scenarios: number;
+  missing_question_ids: string[];
+  total_units: number;
+  completed_units: number;
+  skipped_units: number;
+  scenario_coverage_rate: number | null;
+  execution_coverage_rate: number | null;
+  partial_coverage: boolean;
+}
+
 export interface BatchComparisonResult {
+  experiment_run_id: string;
+  coverage: ComparisonCoverage;
   selected_scenario: SelectedScenarioComparison | null;
   summary: ComparisonStrategySummary[];
   rows: ComparisonRow[];
@@ -209,6 +228,7 @@ export interface BatchComparisonResult {
 
 export interface ComparisonJob {
   job_id: string;
+  experiment_run_id: string;
   status: "pending" | "running" | "completed" | "failed";
   progress: ComparisonProgress;
   result: BatchComparisonResult | null;

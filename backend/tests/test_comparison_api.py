@@ -43,13 +43,20 @@ def test_comparison_api_runs_mock_batch_job() -> None:
     )
 
     assert created.status_code == 200
-    job = client.get(f"/comparison/jobs/{created.json()['job_id']}")
+    created_body = created.json()
+    assert created_body["experiment_run_id"]
+    job = client.get(f"/comparison/jobs/{created_body['job_id']}")
     assert job.status_code == 200
     body = job.json()
     assert body["status"] == "completed"
+    assert body["experiment_run_id"] == created_body["experiment_run_id"]
+    assert body["result"]["experiment_run_id"] == created_body["experiment_run_id"]
     assert body["result"]["selected_scenario"]["original_answer"] == "A"
     assert body["result"]["selected_scenario"]["foils"] == ["C"]
     assert body["result"]["summary"][0]["strategy_id"] == "s1_word_greedy"
+    by_run = client.get(f"/comparison/runs/{created_body['experiment_run_id']}")
+    assert by_run.status_code == 200
+    assert by_run.json()["job_id"] == created_body["job_id"]
 
 
 def test_comparison_api_supports_batch_only_without_selected_scenario() -> None:
@@ -74,3 +81,41 @@ def test_comparison_api_supports_batch_only_without_selected_scenario() -> None:
     assert body["status"] == "completed"
     assert body["result"]["selected_scenario"] is None
     assert body["result"]["summary"][0]["runs"] >= 1
+
+
+def test_comparison_api_rejects_duplicate_question_ids() -> None:
+    client = TestClient(app)
+
+    response = client.post(
+        "/comparison",
+        json={
+            "model": "mock",
+            "strategy_ids": ["s1_word_greedy"],
+            "question_ids": ["q_regina_001", "q_regina_001"],
+            "task_type": "EU",
+            "limit": 1,
+            "budget": 5,
+            "foil_mode": "single",
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_comparison_api_rejects_unknown_strategy_before_queueing() -> None:
+    client = TestClient(app)
+
+    response = client.post(
+        "/comparison",
+        json={
+            "model": "mock",
+            "strategy_ids": ["does_not_exist"],
+            "task_type": "EU",
+            "limit": 1,
+            "budget": 5,
+            "foil_mode": "single",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "Unknown strategy_id" in response.json()["detail"]

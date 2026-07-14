@@ -16,7 +16,10 @@ def create_comparison_job(
     request: ComparisonCreateRequest,
     background_tasks: BackgroundTasks,
 ) -> ComparisonCreateResponse:
-    response = comparison_service.create_job(request)
+    try:
+        response = comparison_service.create_job(request)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     background_tasks.add_task(comparison_service.run_job, response.job_id, request)
     return response
 
@@ -26,4 +29,15 @@ def get_comparison_job(job_id: str) -> ComparisonJobResponse:
     job = comparison_service.get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail=f"Unknown comparison job_id: {job_id}")
+    return job
+
+
+@router.get("/runs/{experiment_run_id}", response_model=ComparisonJobResponse)
+def get_comparison_run(experiment_run_id: str) -> ComparisonJobResponse:
+    job = comparison_service.get_job_by_run(experiment_run_id)
+    if job is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown experiment_run_id: {experiment_run_id}",
+        )
     return job

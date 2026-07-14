@@ -29,11 +29,34 @@ class ComparisonCreateRequest(APIModel):
             raise ValueError("strategy_ids must contain at least one strategy")
         if len(set(self.strategy_ids)) != len(self.strategy_ids):
             raise ValueError("strategy_ids must not contain duplicates")
+        if self.question_ids is not None:
+            if not self.question_ids:
+                raise ValueError("question_ids must be omitted or contain at least one ID")
+            if len(set(self.question_ids)) != len(self.question_ids):
+                raise ValueError("question_ids must not contain duplicates")
+        if (
+            self.selected_scenario is not None
+            and self.selected_question_id is not None
+            and self.selected_scenario.question_id != self.selected_question_id
+        ):
+            raise ValueError("selected_question_id must match selected_scenario.question_id")
+        selected_id = (
+            self.selected_scenario.question_id
+            if self.selected_scenario is not None
+            else self.selected_question_id
+        )
+        if (
+            self.question_ids is not None
+            and selected_id is not None
+            and selected_id not in self.question_ids
+        ):
+            raise ValueError("question_ids must include the selected scenario")
         return self
 
 
 class ComparisonCreateResponse(APIModel):
     job_id: str
+    experiment_run_id: str
     status: JobStatus
 
 
@@ -47,6 +70,7 @@ class ComparisonProgress(APIModel):
 
 
 class ComparisonRow(APIModel):
+    experiment_run_id: str
     question_id: str
     scenario_item_id: str
     task_type: str
@@ -75,11 +99,14 @@ class ComparisonRow(APIModel):
 class ComparisonStrategySummary(APIModel):
     strategy_id: str
     runs: int
+    attempted_count: int
     success_count: int
     not_found_count: int
     failed_count: int
     skipped_count: int
     flip_rate: float | None
+    coverage_rate: float | None
+    partial_coverage: bool
     avg_token_edit_distance: float | None
     median_token_edit_distance: float | None
     avg_changed_word_fraction: float | None
@@ -96,7 +123,21 @@ class SelectedScenarioComparison(APIModel):
     rows: list[ComparisonRow]
 
 
+class ComparisonCoverage(APIModel):
+    requested_scenarios: int
+    resolved_scenarios: int
+    missing_question_ids: list[str]
+    total_units: int
+    completed_units: int
+    skipped_units: int
+    scenario_coverage_rate: float | None
+    execution_coverage_rate: float | None
+    partial_coverage: bool
+
+
 class BatchComparisonResult(APIModel):
+    experiment_run_id: str
+    coverage: ComparisonCoverage
     selected_scenario: SelectedScenarioComparison | None = None
     summary: list[ComparisonStrategySummary]
     rows: list[ComparisonRow]
@@ -104,6 +145,7 @@ class BatchComparisonResult(APIModel):
 
 class ComparisonJobResponse(APIModel):
     job_id: str
+    experiment_run_id: str
     status: JobStatus
     progress: ComparisonProgress
     result: BatchComparisonResult | None = None

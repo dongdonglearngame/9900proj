@@ -36,6 +36,7 @@ export function BatchSummaryTable({ summaries, strategies }: BatchSummaryTablePr
           <tr>
             <th>Strategy</th>
             <th>Runs</th>
+            <th>Coverage</th>
             <th>Success</th>
             <th>No Result</th>
             <th>Errors</th>
@@ -54,6 +55,10 @@ export function BatchSummaryTable({ summaries, strategies }: BatchSummaryTablePr
             <tr key={summary.strategy_id}>
               <th scope="row">{strategyName(summary.strategy_id, strategies)}</th>
               <td data-label="Runs">{summary.runs}</td>
+              <td data-label="Coverage">
+                {summary.attempted_count} / {summary.runs}
+                {summary.partial_coverage ? <small>Partial</small> : null}
+              </td>
               <td data-label="Success">
                 {summary.success_count} / {summary.runs}
               </td>
@@ -75,8 +80,9 @@ export function BatchSummaryTable({ summaries, strategies }: BatchSummaryTablePr
       </table>
       <div className="batch-summary-note">
         <span>No Result means no counterfactual was found within the budget.</span>
+        <span>Flip rate uses every scheduled run, including skipped cases.</span>
         <span>Avg edit, median edit, and avg changed use successful runs only.</span>
-        <span>Avg fluency / perplexity: not available.</span>
+        <span>Avg fluency / perplexity: not measured.</span>
       </div>
     </div>
   );

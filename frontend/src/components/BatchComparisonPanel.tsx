@@ -118,10 +118,26 @@ export function BatchComparisonPanel({
   const [batchError, setBatchError] = useState<string | null>(null);
   const [runningScope, setRunningScope] = useState<RunScope | null>(null);
 
-  const strategyIds = useMemo(
+  const defaultIds = useMemo(
     () => defaultStrategyIds(strategies, selectedStrategy),
     [strategies, selectedStrategy],
   );
+  const [strategyIds, setStrategyIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    const available = new Set(defaultIds);
+    setStrategyIds((current) => {
+      const valid = current.filter((strategyId) => available.has(strategyId));
+      const next = valid.length > 0 ? valid : defaultIds;
+      if (
+        next.length === current.length
+        && next.every((strategyId, index) => strategyId === current[index])
+      ) {
+        return current;
+      }
+      return next;
+    });
+  }, [defaultIds]);
 
   useEffect(() => {
     setSelectedJob(null);
@@ -132,6 +148,35 @@ export function BatchComparisonPanel({
     setBatchJob(null);
     setBatchError(null);
   }, [selectedModel, selectedTaskType]);
+
+  useEffect(() => {
+    setSelectedJob(null);
+    setBatchJob(null);
+    setSelectedError(null);
+    setBatchError(null);
+  }, [strategyIds]);
+
+  useEffect(() => {
+    setSelectedJob(null);
+    setSelectedError(null);
+  }, [selectedBudget, selectedFoilMode]);
+
+  useEffect(() => {
+    setBatchJob(null);
+    setBatchError(null);
+  }, [batchBudget, batchFoilMode, batchLimit]);
+
+  function toggleStrategy(strategyId: string) {
+    setStrategyIds((current) => {
+      if (!current.includes(strategyId)) {
+        return [...current, strategyId];
+      }
+      if (current.length === 1) {
+        return current;
+      }
+      return current.filter((candidate) => candidate !== strategyId);
+    });
+  }
 
   async function runComparison(scope: RunScope) {
     if (!selectedModel || strategyIds.length === 0) {
@@ -201,9 +246,31 @@ export function BatchComparisonPanel({
   const batchCompletedRuns = strategyRunCount(batchJob);
   const batchScenarioCount = uniqueQuestionCount(batchJob);
   const batchFoilCaseCount = uniqueFoilCaseCount(batchJob);
+  const selectedCoverage = selectedJob?.result?.coverage ?? null;
+  const batchCoverage = batchResult?.coverage ?? null;
 
   return (
     <section className="comparison-page-grid">
+      <section className="panel comparison-panel">
+        <div className="section-heading">
+          <h2>Strategies</h2>
+          <p>Fixed strategy set for selected and batch runs.</p>
+        </div>
+        <div className="comparison-strategy-picker" aria-label="Comparison strategies">
+          {strategies.filter((strategy) => strategy.available).map((strategy) => (
+            <label className="strategy-toggle" key={strategy.id}>
+              <input
+                checked={strategyIds.includes(strategy.id)}
+                disabled={runningScope !== null}
+                type="checkbox"
+                onChange={() => toggleStrategy(strategy.id)}
+              />
+              <span>{strategy.name}</span>
+            </label>
+          ))}
+        </div>
+      </section>
+
       <section className="panel comparison-panel">
         <div className="section-heading">
           <h2>Selected Scenario Comparison</h2>
@@ -218,12 +285,14 @@ export function BatchComparisonPanel({
               <span>Model: {selectedModel || "Loading"}</span>
               <span>Strategies: {strategyIds.length}</span>
               <span>Runs: {selectedEstimatedRuns}</span>
+              {selectedJob ? <span>Run: {selectedJob.experiment_run_id}</span> : null}
             </div>
 
             <div className="comparison-config-grid two-controls">
               <label>
                 <span>Target Verification Budget</span>
                 <input
+                  disabled={runningScope !== null}
                   max={100}
                   min={1}
                   type="number"
@@ -235,6 +304,7 @@ export function BatchComparisonPanel({
               <label>
                 <span>Foil Mode</span>
                 <select
+                  disabled={runningScope !== null}
                   value={selectedFoilMode}
                   onChange={(event) => setSelectedFoilMode(event.target.value as FoilMode)}
                 >
@@ -279,6 +349,17 @@ export function BatchComparisonPanel({
 
             {selectedResult ? (
               <div className="comparison-results">
+                {selectedCoverage ? (
+                  <div className="status-strip" role="status">
+                    <strong>{selectedCoverage.partial_coverage ? "Partial coverage" : "Complete coverage"}</strong>
+                    <span>
+                      Scenarios: {selectedCoverage.resolved_scenarios} / {selectedCoverage.requested_scenarios}
+                    </span>
+                    <span>
+                      Executed: {selectedCoverage.completed_units} / {selectedCoverage.total_units}
+                    </span>
+                  </div>
+                ) : null}
                 <SelectedScenarioDetail comparison={selectedResult} />
                 <SelectedScenarioComparisonTable
                   groundTruth={selectedResult.ground_truth}
@@ -305,7 +386,11 @@ export function BatchComparisonPanel({
         <div className="comparison-config-grid">
           <label>
             <span>Batch Size</span>
-            <select value={batchLimit} onChange={(event) => setBatchLimit(Number(event.target.value))}>
+            <select
+              disabled={runningScope !== null}
+              value={batchLimit}
+              onChange={(event) => setBatchLimit(Number(event.target.value))}
+            >
               <option value={5}>5 scenarios</option>
               <option value={10}>10 scenarios</option>
               <option value={20}>20 scenarios</option>
@@ -317,6 +402,7 @@ export function BatchComparisonPanel({
           <label>
             <span>Target Verification Budget</span>
             <input
+              disabled={runningScope !== null}
               max={100}
               min={1}
               type="number"
@@ -327,7 +413,11 @@ export function BatchComparisonPanel({
 
           <label>
             <span>Foil Mode</span>
-            <select value={batchFoilMode} onChange={(event) => setBatchFoilMode(event.target.value as FoilMode)}>
+            <select
+              disabled={runningScope !== null}
+              value={batchFoilMode}
+              onChange={(event) => setBatchFoilMode(event.target.value as FoilMode)}
+            >
               <option value="single">Single fixed foil</option>
               <option value="all_non_original">All non-original foils</option>
             </select>
@@ -339,7 +429,8 @@ export function BatchComparisonPanel({
           <span>Model: {selectedModel || "Loading"}</span>
           <span>Strategies: {strategyIds.length}</span>
           <span>Estimated runs: up to {batchEstimatedRuns}</span>
-          {batchCompletedRuns !== null ? <span>Completed strategy runs: {batchCompletedRuns}</span> : null}
+          {batchCompletedRuns !== null ? <span>Recorded strategy runs: {batchCompletedRuns}</span> : null}
+          {batchJob ? <span>Run: {batchJob.experiment_run_id}</span> : null}
         </div>
 
         <div className="comparison-context-strip">
@@ -367,11 +458,25 @@ export function BatchComparisonPanel({
 
         {batchResult ? (
           <div className="comparison-results">
+            {batchCoverage ? (
+              <div className="status-strip" role="status">
+                <strong>{batchCoverage.partial_coverage ? "Partial coverage" : "Complete coverage"}</strong>
+                <span>
+                  Scenarios: {batchCoverage.resolved_scenarios} / {batchCoverage.requested_scenarios}
+                </span>
+                <span>
+                  Executed: {batchCoverage.completed_units} / {batchCoverage.total_units}
+                </span>
+                {batchCoverage.missing_question_ids.length > 0 ? (
+                  <span>Missing IDs: {batchCoverage.missing_question_ids.join(", ")}</span>
+                ) : null}
+              </div>
+            ) : null}
             <div className="section-heading">
               <h2>Batch Summary Results</h2>
               <p>
-                {batchScenarioCount} scenarios generated {batchFoilCaseCount} foil cases.
-                {" "}{batchFoilCaseCount} foil cases x {strategyIds.length} strategies = {batchCompletedRuns} strategy runs.
+                {batchScenarioCount} scenarios produced {batchFoilCaseCount} concrete foil cases
+                {" "}and {batchCompletedRuns} recorded strategy rows.
               </p>
             </div>
             <BatchSummaryTable summaries={batchResult.summary} strategies={strategies} />
