@@ -23,14 +23,18 @@ must not import or instantiate LLM clients, call `/predict`, build target
 prompts, change decoding settings, or pass the foil into target prediction.
 
 `proposer` is the injected generative search-agent harness. It may see the foil
-and can propose candidate scenario rewrites, but it is separate from the frozen
-target harness and must not use the prediction cache.
+and can propose either full candidate rewrites through `propose(...)` or typed,
+single-span concept interventions through `propose_concept_edits(...)`. It is
+separate from the frozen target harness and must not use the prediction cache.
+S6 may call `repair_concept_edit(...)` at most once per run to correct an invalid
+`original_span`; the repair must preserve the concept class and replacement.
 
-The target (`model.target_predict`) and proposer harness methods such as
-`proposer.propose` and `proposer.infill` are the injected search capabilities. Adding
-a strategy that reuses these requires no
-service or route changes. Strategies still must not import or instantiate LLM
-clients, build target prompts, change decoding, or leak the foil into the target.
+The target (`model.target_predict`) and the methods exposed by the injected
+`proposer` harness are the two search capabilities. Adding a strategy that reuses
+these requires no new strategy dispatch or model-access path. Shared result schema
+and metadata mapping may still be extended. Strategies must not import or
+instantiate LLM clients, build target prompts, change decoding, or leak the foil
+into the target.
 
 Required steps:
 
@@ -48,9 +52,19 @@ require changes to service or API route code.
 Rules:
 
 - `model.target_predict(scenario, choices)` must be the only target-model path.
-- Methods exposed by the injected proposer harness must be the only generative paths.
+- Methods exposed by the injected proposer harness, including `propose(...)`,
+  `infill(...)`, `propose_concept_edits(...)`, and `repair_concept_edit(...)`, must be
+  the only generative paths.
 - The strategy may see `foil`, but the target prompt must not.
 - Respect `budget`.
 - Record failed attempts when useful.
 - Report candidate guard outcomes through the shared proposer diagnostics helper.
 - Do not compute shared metrics inside the strategy.
+
+S6 uses causal-inspired concept interventions rather than claiming formally
+identified causal effects. Each successful S6 result carries the final concept
+class and exact source/replacement spans. A postprocessor that changes those
+spans must update the metadata or the service falls back to the verified raw
+result. S6 passes prior `(concept_class, original_span, target_value)` tuples back
+to the proposer, prioritises unused concept/span pairs deterministically, and
+requires every repaired span to be a unique contiguous substring of the scenario.

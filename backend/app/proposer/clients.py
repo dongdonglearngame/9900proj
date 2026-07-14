@@ -39,13 +39,28 @@ class MockProposerClient:
         payload = _payload_from_messages(messages)
         count = max(0, int(payload.get("count", 1)))
         masked_scenario = payload.get("masked_scenario")
+        scenario = str(payload.get("scenario", ""))
+
+        if payload.get("mode") in {"concept_edit", "concept_edit_repair"}:
+            edits = (
+                _mock_concept_repair(scenario, payload.get("invalid_edit"))
+                if payload.get("mode") == "concept_edit_repair"
+                else _mock_concept_edits(
+                    scenario,
+                    allowed_concepts=payload.get("allowed_concepts", []),
+                    avoid=payload.get("avoid", []),
+                )[:count]
+            )
+            return ProposerCompletion(
+                content=json.dumps({"edits": edits}),
+                done_reason="stop",
+            )
 
         if isinstance(masked_scenario, str):
             candidates = _mock_infill_candidates(masked_scenario)[:count]
             rationale = "mock proposer constrained infill"
         else:
-            scenario = payload.get("scenario", "")
-            candidates = _mock_candidates(str(scenario))[:count]
+            candidates = _mock_candidates(scenario)[:count]
             rationale = "mock proposer minimal time shift"
         rewrites = [
             {"modified_scenario": candidate, "rationale": rationale}
@@ -134,6 +149,68 @@ def _mock_candidates(scenario: str) -> list[str]:
             candidates.append(f"{stripped} It is early evening.")
 
     return _dedupe_preserving_order(candidates)
+
+
+def _mock_concept_edits(
+    scenario: str,
+    *,
+    allowed_concepts: object,
+    avoid: object,
+) -> list[dict[str, str]]:
+    if not isinstance(allowed_concepts, list) or "time" not in allowed_concepts:
+        return []
+    avoided = (
+        {value for value in avoid if isinstance(value, str)}
+        if isinstance(avoid, list)
+        else set()
+    )
+    replacements = (
+        ("middle of the night", "early evening"),
+        ("late at night", "early evening"),
+        ("after midnight", "early evening"),
+        ("overnight", "during the afternoon"),
+    )
+    lower = scenario.casefold()
+    edits: list[dict[str, str]] = []
+    for source, replacement in replacements:
+        index = lower.find(source)
+        if index == -1:
+            continue
+        original = scenario[index : index + len(source)]
+        description = f"time: '{original}' -> '{replacement}'"
+        if description in avoided:
+            continue
+        edits.append(
+            {
+                "concept_class": "time",
+                "original_span": original,
+                "replacement_span": replacement,
+                "source_value": "late night",
+                "target_value": "early evening",
+                "rationale": "mock proposer single-concept time shift",
+            }
+        )
+    return edits
+
+
+def _mock_concept_repair(
+    scenario: str,
+    invalid_edit: object,
+) -> list[dict[str, str | None]]:
+    if not isinstance(invalid_edit, dict):
+        return []
+    for original in (
+        "middle of the night",
+        "late at night",
+        "after midnight",
+        "overnight",
+    ):
+        if original.casefold() not in scenario.casefold():
+            continue
+        repaired = dict(invalid_edit)
+        repaired["original_span"] = original
+        return [repaired]
+    return []
 
 
 def _mock_infill_candidates(masked_scenario: str) -> list[str]:

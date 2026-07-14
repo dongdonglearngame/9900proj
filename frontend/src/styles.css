@@ -659,6 +659,56 @@ mark {
   font-size: 16px;
 }
 
+.concept-summary {
+  background: #f4f9ff;
+  border-left: 4px solid #2979d8;
+  border-radius: 0 8px 8px 0;
+  display: grid;
+  gap: 12px;
+  margin-top: 24px;
+  padding: 18px 20px;
+}
+
+.concept-summary-heading {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.concept-summary-heading strong {
+  color: #173f70;
+  font-size: 18px;
+}
+
+.concept-summary p {
+  align-items: center;
+  color: #334f74;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0;
+}
+
+.concept-summary p span {
+  background: #ffffff;
+  border: 1px solid #cadcf2;
+  border-radius: 6px;
+  padding: 6px 9px;
+}
+
+.concept-summary p strong {
+  color: #6b7f9c;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.concept-summary small {
+  color: #526b92;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
 .metrics-strip {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   margin-top: -2px;

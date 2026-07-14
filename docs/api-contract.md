@@ -36,6 +36,14 @@ Creates an async counterfactual job. Mock mode completes the job through FastAPI
 
 Returns `pending`, `running`, `completed`, or `failed` job state with progress counters and a result payload.
 
+The result payload includes nullable `concept_edit` metadata. For a successful
+`s6_concept_causal_editing` result it contains `concept_class`, `original_span`,
+`replacement_span`, optional source/target values, and rationale. Other
+strategies and `not_found` S6 results return `concept_edit: null`.
+S6 proposer diagnostics distinguish the main grounded-concept prompt from the
+single optional span-repair prompt by `prompt_version`; repair remains bounded to
+one proposer call per strategy run.
+
 Proposer-backed results include `proposer_diagnostics` with per-call prompt version,
 seed, generation settings and output metadata,
 raw/parsed/delivered candidate counts, guard rejection totals, and candidate-yield

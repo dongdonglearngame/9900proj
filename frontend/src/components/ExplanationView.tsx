@@ -61,6 +61,13 @@ function statusCopy(result: CounterfactualResult) {
   return "Counterfactual generation failed.";
 }
 
+function formatConceptClass(value: string) {
+  return value
+    .split("_")
+    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+    .join(" ");
+}
+
 export function ExplanationView({ modelName, result }: ExplanationViewProps) {
   const modifiedScenario = result.modified_scenario ?? "No counterfactual scenario generated.";
 
@@ -99,6 +106,21 @@ export function ExplanationView({ modelName, result }: ExplanationViewProps) {
           <strong className="choice-badge success-badge">{result.new_answer ?? "-"}</strong>
         </div>
       </div>
+
+      {result.concept_edit ? (
+        <div className="concept-summary">
+          <div className="concept-summary-heading">
+            <span className="readout-label">Changed Concept</span>
+            <strong>{formatConceptClass(result.concept_edit.concept_class)}</strong>
+          </div>
+          <p>
+            <span>{result.concept_edit.original_span}</span>
+            <strong aria-hidden="true">to</strong>
+            <span>{result.concept_edit.replacement_span}</span>
+          </p>
+          {result.concept_edit.rationale ? <small>{result.concept_edit.rationale}</small> : null}
+        </div>
+      ) : null}
 
       {result.message ? (
         <div className="insight-box">

@@ -73,6 +73,15 @@ class DiffSpan(APIModel):
     modified: str
 
 
+class ConceptEditPayload(APIModel):
+    concept_class: str
+    original_span: str
+    replacement_span: str
+    source_value: str | None = None
+    target_value: str | None = None
+    rationale: str | None = None
+
+
 class CounterfactualResultPayload(APIModel):
     status: Literal["success", "not_found", "failed"]
     experiment_run_id: str | None = None
@@ -88,6 +97,7 @@ class CounterfactualResultPayload(APIModel):
     metrics: CounterfactualMetrics
     proposer_diagnostics: ProposerDiagnostics | None = None
     message: str | None = None
+    concept_edit: ConceptEditPayload | None = None
 
 
 class CounterfactualJobResponse(APIModel):

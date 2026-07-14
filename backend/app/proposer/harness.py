@@ -1,11 +1,20 @@
-import json
-import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from time import perf_counter
 from typing import Any, Literal
 
 from app.proposer.clients import ProposerClient, ProposerCompletion
+from app.proposer.concept_parser import (
+    ConceptEditParseResult,
+    parse_concept_edits_with_diagnostics,
+)
+from app.proposer.concept_prompts import (
+    S6_CONCEPT_PROMPT_VERSION,
+    S6_CONCEPT_REPAIR_PROMPT_VERSION,
+    build_concept_proposer_messages,
+    build_concept_repair_messages,
+)
+from app.proposer.json_utils import load_json_payload
 from app.proposer.prompts import (
     S2_PROPOSER_PROMPT_VERSION,
     S4_INFILL_PROMPT_VERSION,
@@ -13,7 +22,7 @@ from app.proposer.prompts import (
     build_proposer_messages,
 )
 from app.schemas.proposer import ProposerCallDiagnostics
-from app.strategies.base import ProposedEdit
+from app.strategies.base import ConceptEdit, ConceptEditKey, ProposedEdit
 
 CandidateOutcome = Literal[
     "unique_valid",
@@ -153,6 +162,106 @@ class ProposerHarness:
         if self._on_candidate_outcome is not None:
             self._on_candidate_outcome(outcome)
 
+    def propose_concept_edits(
+        self,
+        scenario: str,
+        choices: dict[str, str],
+        foil: str,
+        count: int,
+        allowed_concepts: tuple[str, ...],
+        avoid: list[str] | None = None,
+        used_edits: list[ConceptEditKey] | None = None,
+    ) -> list[ConceptEdit]:
+        messages = build_concept_proposer_messages(
+            scenario=scenario,
+            choices=choices,
+            foil=foil,
+            original_answer=self._original_answer,
+            count=count,
+            allowed_concepts=allowed_concepts,
+            avoid=avoid,
+            used_edits=used_edits,
+        )
+        return self._complete_concepts(
+            messages,
+            count=count,
+            allowed_concepts=allowed_concepts,
+            prompt_version=S6_CONCEPT_PROMPT_VERSION,
+        )
+
+    def repair_concept_edit(
+        self,
+        scenario: str,
+        choices: dict[str, str],
+        foil: str,
+        edit: ConceptEdit,
+        allowed_concepts: tuple[str, ...],
+        used_edits: list[ConceptEditKey] | None = None,
+    ) -> ConceptEdit | None:
+        messages = build_concept_repair_messages(
+            scenario=scenario,
+            choices=choices,
+            foil=foil,
+            original_answer=self._original_answer,
+            edit=edit,
+            allowed_concepts=allowed_concepts,
+            used_edits=used_edits,
+        )
+        edits = self._complete_concepts(
+            messages,
+            count=1,
+            allowed_concepts=allowed_concepts,
+            prompt_version=S6_CONCEPT_REPAIR_PROMPT_VERSION,
+        )
+        return edits[0] if edits else None
+
+    def _complete_concepts(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        count: int,
+        allowed_concepts: tuple[str, ...],
+        prompt_version: str,
+    ) -> list[ConceptEdit]:
+        call_seed = self._seed + self._call_index
+        self._call_index += 1
+        options = {
+            "temperature": self._temperature,
+            "seed": call_seed,
+            "num_predict": self._num_predict,
+        }
+        started = perf_counter()
+        completion: ProposerCompletion | None = None
+        parse_result = ConceptEditParseResult([], 0, 0)
+        try:
+            completion = _normalise_completion(self._client.complete(messages, options))
+            parse_result = parse_concept_edits_with_diagnostics(
+                completion.content,
+                limit=count,
+                allowed_concepts=allowed_concepts,
+            )
+            return parse_result.edits
+        finally:
+            latency_seconds = round(perf_counter() - started, 4)
+            self._on_call()
+            if self._on_diagnostics is not None:
+                self._on_diagnostics(
+                    ProposerCallDiagnostics(
+                        prompt_version=prompt_version,
+                        requested_candidates=count,
+                        seed=call_seed,
+                        num_predict=self._num_predict,
+                        temperature=self._temperature,
+                        raw_candidates=parse_result.raw_candidates,
+                        parsed_candidates=parse_result.parsed_candidates,
+                        delivered_candidates=len(parse_result.edits),
+                        done_reason=(completion.done_reason if completion else "error"),
+                        eval_count=completion.eval_count if completion else None,
+                        response_tokens=(completion.response_tokens if completion else None),
+                        latency_seconds=latency_seconds,
+                    )
+                )
+
 
 def parse_proposed_edits(
     raw: str | ProposerCompletion,
@@ -170,7 +279,7 @@ def parse_proposed_edits_with_diagnostics(
     if limit <= 0:
         return ProposedEditParseResult([], 0, 0)
     raw_text = raw.content if isinstance(raw, ProposerCompletion) else raw
-    payload = _load_json_payload(raw_text)
+    payload = load_json_payload(raw_text)
     if payload is None:
         return ProposedEditParseResult([], 0, 0)
 
@@ -189,31 +298,6 @@ def parse_proposed_edits_with_diagnostics(
         raw_candidates=len(items),
         parsed_candidates=len(parsed_edits),
     )
-
-
-def _load_json_payload(raw: str) -> Any | None:
-    text = _strip_code_fence(raw.strip())
-    for candidate in _json_candidates(text):
-        try:
-            return json.loads(candidate)
-        except json.JSONDecodeError:
-            continue
-    return None
-
-
-def _strip_code_fence(value: str) -> str:
-    match = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", value, flags=re.IGNORECASE | re.DOTALL)
-    return match.group(1).strip() if match else value
-
-
-def _json_candidates(value: str) -> list[str]:
-    candidates = [value]
-    for opening, closing in (("{", "}"), ("[", "]")):
-        start = value.find(opening)
-        end = value.rfind(closing)
-        if start != -1 and end != -1 and end > start:
-            candidates.append(value[start : end + 1])
-    return candidates
 
 
 def _coerce_edit(item: Any) -> ProposedEdit | None:

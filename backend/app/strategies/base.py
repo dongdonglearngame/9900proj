@@ -29,6 +29,19 @@ class ProposedEdit:
     change_type: str | None = None
 
 
+@dataclass(frozen=True)
+class ConceptEdit:
+    concept_class: str
+    original_span: str
+    replacement_span: str
+    source_value: str | None = None
+    target_value: str | None = None
+    rationale: str | None = None
+
+
+ConceptEditKey = tuple[str, str, str]
+
+
 class Proposer(Protocol):
     """Generative search-agent port exposed to strategies.
 
@@ -45,6 +58,29 @@ class Proposer(Protocol):
         avoid: list[str] | None = None,
     ) -> list[ProposedEdit]:
         """Generate candidate scenario rewrites for later target verification."""
+
+    def propose_concept_edits(
+        self,
+        scenario: str,
+        choices: dict[str, str],
+        foil: str,
+        count: int,
+        allowed_concepts: tuple[str, ...],
+        avoid: list[str] | None = None,
+        used_edits: list[ConceptEditKey] | None = None,
+    ) -> list[ConceptEdit]:
+        """Generate single-concept span replacements for later target verification."""
+
+    def repair_concept_edit(
+        self,
+        scenario: str,
+        choices: dict[str, str],
+        foil: str,
+        edit: ConceptEdit,
+        allowed_concepts: tuple[str, ...],
+        used_edits: list[ConceptEditKey] | None = None,
+    ) -> ConceptEdit | None:
+        """Repair one concept edit's span grounding without changing its intervention."""
 
     def infill(
         self,
@@ -89,6 +125,7 @@ class CounterfactualResult:
     strategy_id: str
     attempts: list[AttemptRecord]
     message: str | None = None
+    concept_edit: ConceptEdit | None = None
 
 
 class CounterfactualStrategy(ABC):
