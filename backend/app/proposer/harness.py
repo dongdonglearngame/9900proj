@@ -4,7 +4,7 @@ from collections.abc import Callable
 from typing import Any
 
 from app.proposer.clients import ProposerClient
-from app.proposer.prompts import build_proposer_messages
+from app.proposer.prompts import build_infill_messages, build_proposer_messages
 from app.strategies.base import ProposedEdit
 
 
@@ -44,6 +44,29 @@ class ProposerHarness:
             count=count,
             avoid=avoid,
         )
+        return self._complete(messages, count=count)
+
+    def infill(
+        self,
+        original_scenario: str,
+        masked_scenario: str,
+        choices: dict[str, str],
+        foil: str,
+        count: int,
+        avoid: list[str] | None = None,
+    ) -> list[ProposedEdit]:
+        messages = build_infill_messages(
+            original_scenario=original_scenario,
+            masked_scenario=masked_scenario,
+            choices=choices,
+            foil=foil,
+            original_answer=self._original_answer,
+            count=count,
+            avoid=avoid,
+        )
+        return self._complete(messages, count=count)
+
+    def _complete(self, messages: list[dict[str, str]], *, count: int) -> list[ProposedEdit]:
         options = {
             "temperature": self._temperature,
             "seed": self._seed,

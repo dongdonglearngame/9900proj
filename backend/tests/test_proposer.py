@@ -84,6 +84,51 @@ def test_proposer_harness_counts_round_trip_even_on_parse_failure() -> None:
     assert "logprobs" not in client.options
 
 
+def test_proposer_harness_infill_builds_constrained_prompt_and_counts() -> None:
+    calls = 0
+    client = CapturingClient(
+        raw=json.dumps(
+            {
+                "rewrites": [
+                    {
+                        "modified_scenario": "Regina texted in the early evening.",
+                        "rationale": "fill time mask",
+                    }
+                ]
+            }
+        )
+    )
+
+    def record_call() -> None:
+        nonlocal calls
+        calls += 1
+
+    harness = ProposerHarness(
+        client=client,
+        original_answer="A",
+        temperature=0.7,
+        seed=0,
+        num_predict=512,
+        on_call=record_call,
+    )
+
+    edits = harness.infill(
+        original_scenario="Regina texted in the middle of the night.",
+        masked_scenario="Regina texted in the [MASK].",
+        choices=CHOICES,
+        foil="C",
+        count=2,
+    )
+
+    assert calls == 1
+    assert edits[0].modified_scenario == "Regina texted in the early evening."
+    assert client.messages is not None
+    assert "Only replace each [MASK] span" in client.messages[0]["content"]
+    payload = json.loads(client.messages[-1]["content"])
+    assert payload["masked_scenario"] == "Regina texted in the [MASK]."
+    assert payload["original_answer"] == "A"
+
+
 def test_mock_proposer_returns_json_rewrites_that_parser_exercises() -> None:
     scenario = (
         "Regina's best friend recently broke up and is texting Regina in the "
@@ -98,3 +143,27 @@ def test_mock_proposer_returns_json_rewrites_that_parser_exercises() -> None:
 
     assert edits
     assert "early evening" in edits[0].modified_scenario
+
+
+def test_mock_proposer_returns_constrained_infill_rewrites() -> None:
+    raw = MockProposerClient().complete(
+        [
+            {
+                "role": "user",
+                "content": json.dumps(
+                    {
+                        "masked_scenario": "Regina texted in the [MASK].",
+                        "count": 2,
+                    }
+                ),
+            }
+        ],
+        options={},
+    )
+
+    edits = parse_proposed_edits(raw, limit=2)
+
+    assert [edit.modified_scenario for edit in edits] == [
+        "Regina texted in the early evening.",
+        "Regina texted in the afternoon.",
+    ]

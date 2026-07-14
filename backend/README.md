@@ -48,6 +48,13 @@ counterfactual job checkpoints should survive a backend restart.
 For the local real-model setup with Ollama + EmoBench import, see
 [../docs/real-demo-mode.md](../docs/real-demo-mode.md).
 
+S4 Importance-guided Infilling requires Ollama 0.12.11+ for logprob ranking. Check the
+running Ollama instance and selected model before an S4 experiment:
+
+```powershell
+python -m app.scripts.check_ollama_logprobs --model llama3.2:3b
+```
+
 ## Loader
 
 Import EmoBench JSONL into SQLite:

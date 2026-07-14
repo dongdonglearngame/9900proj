@@ -16,12 +16,18 @@ class MockProposerClient:
     def complete(self, messages: list[dict[str, str]], options: dict) -> str:
         _ = options
         payload = _payload_from_messages(messages)
-        scenario = payload.get("scenario", "")
         count = max(0, int(payload.get("count", 1)))
+        masked_scenario = payload.get("masked_scenario")
 
-        candidates = _mock_candidates(str(scenario))[:count]
+        if isinstance(masked_scenario, str):
+            candidates = _mock_infill_candidates(masked_scenario)[:count]
+            rationale = "mock proposer constrained infill"
+        else:
+            scenario = payload.get("scenario", "")
+            candidates = _mock_candidates(str(scenario))[:count]
+            rationale = "mock proposer minimal time shift"
         rewrites = [
-            {"modified_scenario": candidate, "rationale": "mock proposer minimal time shift"}
+            {"modified_scenario": candidate, "rationale": rationale}
             for candidate in candidates
         ]
         return json.dumps({"rewrites": rewrites})
@@ -92,6 +98,16 @@ def _mock_candidates(scenario: str) -> list[str]:
             candidates.append(f"{stripped} It is early evening.")
 
     return _dedupe_preserving_order(candidates)
+
+
+def _mock_infill_candidates(masked_scenario: str) -> list[str]:
+    if "[MASK]" not in masked_scenario:
+        return []
+
+    fills = ("early evening", "afternoon", "during the afternoon")
+    return _dedupe_preserving_order(
+        [masked_scenario.replace("[MASK]", fill) for fill in fills]
+    )
 
 
 def _replace_span(
