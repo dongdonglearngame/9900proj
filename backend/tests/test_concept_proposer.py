@@ -8,7 +8,8 @@ from app.proposer.concepts import (
     normalise_concept_class,
 )
 from app.proposer.harness import ProposerHarness
-from app.strategies.base import ConceptEdit
+from app.schemas.proposer import ProposerCallDiagnostics
+from app.strategies.base import ConceptEdit, ConceptEditKey
 
 CHOICES = {
     "A": "Ignore the texts and continue sleeping",
@@ -92,6 +93,7 @@ def test_apply_concept_edit_uses_original_offsets_and_requires_unique_span() -> 
 def test_concept_harness_counts_failed_parse_and_sends_structured_payload() -> None:
     calls = 0
     client = CapturingClient(raw="not json")
+    diagnostics: list[ProposerCallDiagnostics] = []
 
     def record_call() -> None:
         nonlocal calls
@@ -104,7 +106,9 @@ def test_concept_harness_counts_failed_parse_and_sends_structured_payload() -> N
         seed=0,
         num_predict=512,
         on_call=record_call,
+        on_diagnostics=diagnostics.append,
     )
+    used_edits: list[ConceptEditKey] = [("time", "night", "evening")]
     edits = harness.propose_concept_edits(
         "scenario",
         CHOICES,
@@ -112,6 +116,7 @@ def test_concept_harness_counts_failed_parse_and_sends_structured_payload() -> N
         count=2,
         allowed_concepts=CONCEPT_CLASSES,
         avoid=["time: 'night' -> 'evening'"],
+        used_edits=used_edits,
     )
 
     assert edits == []
@@ -121,8 +126,59 @@ def test_concept_harness_counts_failed_parse_and_sends_structured_payload() -> N
     assert payload["mode"] == "concept_edit"
     assert payload["original_answer"] == "A"
     assert payload["avoid"] == ["time: 'night' -> 'evening'"]
+    assert payload["used_edits"] == [
+        {
+            "concept_class": "time",
+            "original_span": "night",
+            "target_value": "evening",
+        }
+    ]
     assert payload["allowed_concepts"] == list(CONCEPT_CLASSES)
     assert client.options == {"temperature": 0.7, "seed": 0, "num_predict": 512}
+    assert diagnostics[0].prompt_version == "s6-concept-v2-grounded-diverse"
+    assert diagnostics[0].raw_candidates == 0
+
+
+def test_concept_harness_uses_a_distinct_bounded_repair_prompt() -> None:
+    client = CapturingClient(
+        raw=json.dumps(
+            {
+                "edits": [
+                    {
+                        "concept_class": "time",
+                        "original_span": "middle of the night",
+                        "replacement_span": "early evening",
+                    }
+                ]
+            }
+        )
+    )
+    diagnostics: list[ProposerCallDiagnostics] = []
+    harness = ProposerHarness(
+        client=client,
+        original_answer="A",
+        temperature=0.7,
+        seed=5,
+        num_predict=512,
+        on_call=lambda: None,
+        on_diagnostics=diagnostics.append,
+    )
+
+    repaired = harness.repair_concept_edit(
+        "Regina texted in the middle of the night.",
+        CHOICES,
+        "C",
+        ConceptEdit("time", "late-night message", "early evening"),
+        allowed_concepts=CONCEPT_CLASSES,
+    )
+
+    assert repaired is not None
+    assert client.messages is not None
+    payload = json.loads(client.messages[-1]["content"])
+    assert payload["mode"] == "concept_edit_repair"
+    assert payload["invalid_edit"]["original_span"] == "late-night message"
+    assert client.options == {"temperature": 0.7, "seed": 5, "num_predict": 512}
+    assert diagnostics[0].prompt_version == "s6-concept-repair-v1"
 
 
 def test_mock_proposer_returns_parseable_single_concept_edit() -> None:

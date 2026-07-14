@@ -7,14 +7,7 @@ from app.schemas.counterfactual import StrategyInfo
 from app.strategies.base import CounterfactualStrategy
 
 _SKIP_MODULES = {"base", "registry"}
-
-PLANNED_STRATEGIES = [
-    StrategyInfo(
-        id="s4_importance_infilling",
-        name="S4 Importance-guided Infilling",
-        available=False,
-    ),
-]
+PLANNED_STRATEGIES: list[StrategyInfo] = []
 
 
 def get_strategy(strategy_id: str) -> CounterfactualStrategy:

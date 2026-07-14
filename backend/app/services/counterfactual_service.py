@@ -11,7 +11,7 @@ from app.metrics.diff import word_diff
 from app.metrics.scorer import compute_counterfactual_metrics
 from app.proposer.clients import MockProposerClient, OllamaProposerClient
 from app.proposer.concepts import apply_concept_edit
-from app.proposer.harness import ProposerHarness
+from app.proposer.harness import CandidateOutcome, ProposerHarness
 from app.repositories.factory import (
     get_counterfactual_repository,
     get_job_repository,
@@ -26,6 +26,7 @@ from app.schemas.counterfactual import (
     CounterfactualResultPayload,
     PredictionSnapshot,
 )
+from app.schemas.proposer import ProposerCallDiagnostics, ProposerDiagnostics
 from app.services.postprocessor import IdentityPostProcessor
 from app.services.prediction_service import PredictionService, get_prediction_service
 from app.strategies.base import ConceptEdit, CounterfactualResult, FrozenTargetModel
@@ -49,6 +50,10 @@ class CounterfactualRunContext:
         self.search_calls = 0
         self.postprocess_calls = 0
         self.proposer_calls = 0
+        self._proposer_call_diagnostics: list[ProposerCallDiagnostics] = []
+        self._unique_valid_candidates = 0
+        self._target_verified_candidates = 0
+        self._guard_rejections: dict[str, int] = {}
         self._update_hook: Callable[CounterfactualRunContext, None] | None = None
 
     def set_update_hook(self, update_hook: Callable[CounterfactualRunContext, None]) -> None:
@@ -78,6 +83,52 @@ class CounterfactualRunContext:
     def record_proposer_call(self) -> None:
         self.proposer_calls += 1
         self._notify()
+
+    def record_proposer_diagnostics(self, diagnostics: ProposerCallDiagnostics) -> None:
+        self._proposer_call_diagnostics.append(diagnostics)
+
+    def record_candidate_outcome(self, outcome: CandidateOutcome) -> None:
+        if outcome == "unique_valid":
+            self._unique_valid_candidates += 1
+        elif outcome == "target_verified":
+            self._target_verified_candidates += 1
+        else:
+            self._guard_rejections[outcome] = self._guard_rejections.get(outcome, 0) + 1
+
+    def proposer_diagnostics(self) -> ProposerDiagnostics | None:
+        if not self._proposer_call_diagnostics and not self._guard_rejections:
+            return None
+
+        requested = sum(item.requested_candidates for item in self._proposer_call_diagnostics)
+        raw = sum(item.raw_candidates for item in self._proposer_call_diagnostics)
+        parsed = sum(item.parsed_candidates for item in self._proposer_call_diagnostics)
+        delivered = sum(
+            item.delivered_candidates for item in self._proposer_call_diagnostics
+        )
+        return ProposerDiagnostics(
+            calls=list(self._proposer_call_diagnostics),
+            requested_candidates=requested,
+            raw_candidates=raw,
+            parsed_candidates=parsed,
+            delivered_candidates=delivered,
+            unique_valid_candidates=self._unique_valid_candidates,
+            target_verified_candidates=self._target_verified_candidates,
+            guard_rejections=dict(sorted(self._guard_rejections.items())),
+            raw_requested_yield=_ratio(raw, requested),
+            parsed_raw_yield=_ratio(parsed, raw),
+            unique_valid_requested_yield=_ratio(
+                self._unique_valid_candidates,
+                requested,
+            ),
+            target_verified_parsed_yield=_ratio(
+                self._target_verified_candidates,
+                parsed,
+            ),
+            target_verified_delivered_yield=_ratio(
+                self._target_verified_candidates,
+                delivered,
+            ),
+        )
 
     def progress(self) -> CounterfactualProgress:
         return CounterfactualProgress(
@@ -129,7 +180,6 @@ class CounterfactualService:
         return self._job_repo.get(job_id)
 
     def run_job(self, job_id: str, request: CounterfactualCreateRequest) -> None:
-        started = perf_counter()
         context = CounterfactualRunContext(self._prediction_service, request.budget)
         context.set_update_hook(
             lambda updated_context: self._publish_running_job(job_id, updated_context)
@@ -137,42 +187,8 @@ class CounterfactualService:
         self._publish_running_job(job_id, context)
 
         try:
-            original_prediction = self._original_snapshot(request)
-            strategy = get_strategy(request.strategy_id)
-            target_model = FrozenTargetModel(
-                model_id=request.model,
-                target_predict_fn=context.target_predict,
-            )
-            proposer = self._build_proposer(request, context)
-
-            raw_result = strategy.generate(
-                scenario=request.scenario,
-                choices=request.choices,
-                model=target_model,
-                foil=request.foil,
-                budget=request.budget,
-                proposer=proposer,
-            )
-            context.set_phase("postprocess")
-            processed_result = self._postprocessor.process(
-                raw_result,
-                scenario=request.scenario,
-                choices=request.choices,
-                model=target_model,
-                foil=request.foil,
-                budget=request.budget,
-            )
-            publishable_result = _select_publishable_result(raw_result, processed_result)
-            context.set_phase("metrics")
-            payload = self._build_payload(
-                result=publishable_result,
-                context=context,
-                runtime_seconds=round(perf_counter() - started, 4),
-                original_prediction=original_prediction,
-                original_answer=request.original_answer,
-            )
-            self._counterfactual_repo.add(payload)
-            self._metrics_repo.add(payload.metrics)
+            payload = self._run_with_context(request, context)
+            self._store_payload(payload)
             self._job_repo.set(
                 CounterfactualJobResponse(
                     job_id=job_id,
@@ -194,6 +210,59 @@ class CounterfactualService:
                     message=str(exc),
                 )
             )
+
+    def run_once(self, request: CounterfactualCreateRequest) -> CounterfactualResultPayload:
+        """Run one counterfactual search synchronously for batch comparison."""
+        context = CounterfactualRunContext(self._prediction_service, request.budget)
+        payload = self._run_with_context(request, context)
+        self._store_payload(payload)
+        return payload
+
+    def _store_payload(self, payload: CounterfactualResultPayload) -> None:
+        self._counterfactual_repo.add(payload)
+        self._metrics_repo.add(payload.metrics)
+
+    def _run_with_context(
+        self,
+        request: CounterfactualCreateRequest,
+        context: CounterfactualRunContext,
+    ) -> CounterfactualResultPayload:
+        started = perf_counter()
+        original_prediction = self._original_snapshot(request)
+        strategy = get_strategy(request.strategy_id)
+        target_model = FrozenTargetModel(
+            model_id=request.model,
+            target_predict_fn=context.target_predict,
+        )
+        proposer = self._build_proposer(request, context)
+
+        raw_result = strategy.generate(
+            scenario=request.scenario,
+            choices=request.choices,
+            model=target_model,
+            foil=request.foil,
+            budget=request.budget,
+            proposer=proposer,
+        )
+        context.set_phase("postprocess")
+        processed_result = self._postprocessor.process(
+            raw_result,
+            scenario=request.scenario,
+            choices=request.choices,
+            model=target_model,
+            foil=request.foil,
+            budget=request.budget,
+        )
+        publishable_result = _select_publishable_result(raw_result, processed_result)
+        context.set_phase("metrics")
+        return self._build_payload(
+            result=publishable_result,
+            context=context,
+            runtime_seconds=round(perf_counter() - started, 4),
+            original_prediction=original_prediction,
+            original_answer=request.original_answer,
+            experiment_run_id=request.experiment_run_id,
+        )
 
     def _publish_running_job(self, job_id: str, context: CounterfactualRunContext) -> None:
         self._job_repo.set(
@@ -237,8 +306,10 @@ class CounterfactualService:
             original_answer=request.original_answer,
             temperature=settings.proposer_temperature,
             seed=settings.proposer_seed,
-            num_predict=settings.proposer_num_predict,
+            num_predict=_proposer_num_predict(request.strategy_id),
             on_call=context.record_proposer_call,
+            on_diagnostics=context.record_proposer_diagnostics,
+            on_candidate_outcome=context.record_candidate_outcome,
         )
 
     def _build_payload(
@@ -249,6 +320,7 @@ class CounterfactualService:
         runtime_seconds: float,
         original_prediction: PredictionSnapshot,
         original_answer: str,
+        experiment_run_id: str | None,
     ) -> CounterfactualResultPayload:
         successful_attempt = next((attempt for attempt in result.attempts if attempt.success), None)
         new_prediction = None
@@ -258,6 +330,17 @@ class CounterfactualService:
                 option_logprobs=successful_attempt.prediction.option_logprobs,
             )
 
+        candidate_foil_logprobs = [
+            attempt.prediction.option_logprobs.get(result.foil)
+            for attempt in result.attempts
+            if attempt.prediction is not None
+        ]
+        selected_foil_logprob = (
+            successful_attempt.prediction.option_logprobs.get(result.foil)
+            if successful_attempt is not None and successful_attempt.prediction is not None
+            else None
+        )
+
         metrics = compute_counterfactual_metrics(
             original=result.original_scenario,
             modified=result.modified_scenario,
@@ -266,10 +349,15 @@ class CounterfactualService:
             postprocess_calls=context.postprocess_calls,
             proposer_calls=context.proposer_calls,
             runtime_seconds=runtime_seconds,
+            original_foil_logprob=original_prediction.option_logprobs.get(result.foil),
+            candidate_foil_logprobs=candidate_foil_logprobs,
+            selected_foil_logprob=selected_foil_logprob,
         )
+        metrics = metrics.model_copy(update={"experiment_run_id": experiment_run_id})
 
         return CounterfactualResultPayload(
             status=result.status,
+            experiment_run_id=experiment_run_id,
             strategy_id=result.strategy_id,
             original_answer=original_answer,
             foil=result.foil,
@@ -280,6 +368,7 @@ class CounterfactualService:
             new_prediction=new_prediction,
             diff=word_diff(result.original_scenario, result.modified_scenario),
             metrics=metrics,
+            proposer_diagnostics=context.proposer_diagnostics(),
             message=result.message,
             concept_edit=_build_concept_edit_payload(result.concept_edit),
         )
@@ -329,3 +418,18 @@ def _build_concept_edit_payload(edit: ConceptEdit | None) -> ConceptEditPayload 
         target_value=edit.target_value,
         rationale=edit.rationale,
     )
+
+
+def _proposer_num_predict(strategy_id: str) -> int:
+    settings = get_settings()
+    if strategy_id == "s2_llm_propose_verify":
+        return settings.s2_proposer_num_predict
+    if strategy_id == "s6_concept_causal_editing":
+        return settings.s6_proposer_num_predict
+    return settings.proposer_num_predict
+
+
+def _ratio(numerator: int, denominator: int) -> float | None:
+    if denominator == 0:
+        return None
+    return round(numerator / denominator, 4)

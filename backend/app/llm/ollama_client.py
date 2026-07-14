@@ -8,7 +8,7 @@ from app.core.config import get_settings
 from app.harness.logprobs import extract_option_logprobs, option_logprobs_to_probs
 from app.harness.parser import parse_answer_letter
 from app.harness.prompt_templates import build_target_messages
-from app.harness.target_predict import PredictionResult
+from app.harness.target_predict import TARGET_TEMPERATURE, PredictionResult
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +70,7 @@ class OllamaClient:
             "logprobs": True,
             "top_logprobs": settings.top_logprobs,
             "options": {
-                "temperature": 0,
+                "temperature": TARGET_TEMPERATURE,
                 "num_predict": settings.target_num_predict,
             },
         }

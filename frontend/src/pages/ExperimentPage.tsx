@@ -27,12 +27,17 @@ import type {
   StrategyInfo,
 } from "../types/api";
 import { choiceLetters } from "../types/api";
+import type { ExperimentContext } from "../types/experiment";
 
 const jobPollIntervalMs = 500;
 const maxJobPolls = 180;
 const maxJobWaitSeconds = Math.round((jobPollIntervalMs * maxJobPolls) / 1000);
 
 type ScrollTarget = "scenario" | "prediction" | "explanation";
+
+interface ExperimentPageProps {
+  onContextChange?: (context: ExperimentContext) => void;
+}
 
 function firstAvailableId(items: Array<{ id: string; available: boolean }>) {
   return items.find((item) => item.available)?.id ?? items[0]?.id ?? "";
@@ -56,7 +61,7 @@ function sleep(ms: number) {
   });
 }
 
-export function ExperimentPage() {
+export function ExperimentPage({ onContextChange }: ExperimentPageProps) {
   const scenarioStepRef = useRef<HTMLDivElement>(null);
   const predictionStepRef = useRef<HTMLDivElement>(null);
   const explanationStepRef = useRef<HTMLDivElement>(null);
@@ -84,6 +89,23 @@ export function ExperimentPage() {
       .then((response) => setHealth(response.status))
       .catch(() => setHealth("offline"));
   }, []);
+
+  useEffect(() => {
+    onContextChange?.({
+      selectedTaskType,
+      selectedModel,
+      selectedStrategy,
+      scenario,
+      scenarioText,
+    });
+  }, [
+    onContextChange,
+    scenario,
+    scenarioText,
+    selectedModel,
+    selectedStrategy,
+    selectedTaskType,
+  ]);
 
   useEffect(() => {
     let cancelled = false;

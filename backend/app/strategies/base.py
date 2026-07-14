@@ -25,6 +25,8 @@ class TargetModel(Protocol):
 class ProposedEdit:
     modified_scenario: str
     rationale: str | None = None
+    changed_span: str | None = None
+    change_type: str | None = None
 
 
 @dataclass(frozen=True)
@@ -35,6 +37,9 @@ class ConceptEdit:
     source_value: str | None = None
     target_value: str | None = None
     rationale: str | None = None
+
+
+ConceptEditKey = tuple[str, str, str]
 
 
 class Proposer(Protocol):
@@ -62,8 +67,31 @@ class Proposer(Protocol):
         count: int,
         allowed_concepts: tuple[str, ...],
         avoid: list[str] | None = None,
+        used_edits: list[ConceptEditKey] | None = None,
     ) -> list[ConceptEdit]:
         """Generate single-concept span replacements for later target verification."""
+
+    def repair_concept_edit(
+        self,
+        scenario: str,
+        choices: dict[str, str],
+        foil: str,
+        edit: ConceptEdit,
+        allowed_concepts: tuple[str, ...],
+        used_edits: list[ConceptEditKey] | None = None,
+    ) -> ConceptEdit | None:
+        """Repair one concept edit's span grounding without changing its intervention."""
+
+    def infill(
+        self,
+        original_scenario: str,
+        masked_scenario: str,
+        choices: dict[str, str],
+        foil: str,
+        count: int,
+        avoid: list[str] | None = None,
+    ) -> list[ProposedEdit]:
+        """Fill masked scenario spans while preserving the unmasked text."""
 
 
 class FrozenTargetModel:

@@ -1,8 +1,66 @@
 import re
+from difflib import SequenceMatcher
 
+from app.metrics.diff import word_diff
 from app.metrics.edit_distance import changed_word_fraction
 
 WORD_RE = re.compile(r"[A-Za-z0-9']+")
+MORPH_STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "at",
+    "for",
+    "in",
+    "of",
+    "on",
+    "or",
+    "the",
+    "to",
+    "up",
+    "with",
+}
+
+EMOTION_DERIVATION_FAMILIES = (
+    frozenset({"admiration", "admirable", "admiring"}),
+    frozenset({"anticipation", "anticipating", "anticipated"}),
+    frozenset({"relief", "relieved", "relieving"}),
+    frozenset({"anger", "angry", "angrily"}),
+    frozenset({"annoyance", "annoyed", "annoying"}),
+    frozenset({"boredom", "bored", "boring"}),
+    frozenset({"confusion", "confused", "confusing"}),
+    frozenset({"delight", "delighted", "delightful", "thrill", "thrilled", "thrilling"}),
+    frozenset({"disapproval", "disapproving"}),
+    frozenset({"disgust", "disgusted", "disgusting"}),
+    frozenset({"guilt", "guilty"}),
+    frozenset({"pride", "proud", "proudly"}),
+    frozenset({"fear", "afraid", "fearful"}),
+    frozenset({"embarrassment", "embarrassed", "embarrassing"}),
+    frozenset({"happiness", "happy"}),
+    frozenset({"hope", "hopeful", "hopeless", "hopelessness"}),
+    frozenset({"joy", "joyful", "joyous"}),
+    frozenset({"sadness", "sad"}),
+    frozenset({"anxiety", "anxious"}),
+    frozenset({"gratitude", "grateful"}),
+    frozenset({"jealousy", "jealous"}),
+    frozenset({"loneliness", "lonely"}),
+    frozenset({"disappointment", "disappointed"}),
+    frozenset({"excitement", "excited"}),
+    frozenset({"surprise", "surprised"}),
+    frozenset({"shame", "ashamed"}),
+    frozenset({"worry", "worried"}),
+    frozenset({"nervousness", "nervous"}),
+    frozenset({"optimism", "optimistic"}),
+    frozenset({"pessimism", "pessimistic"}),
+    frozenset({"remorse", "remorseful"}),
+    frozenset({"trust", "trusting", "trustful"}),
+)
+
+_EMOTION_FAMILY_BY_WORD = {
+    word: family
+    for family in EMOTION_DERIVATION_FAMILIES
+    for word in family
+}
 
 
 def normalise_key(value: str) -> str:
@@ -10,28 +68,65 @@ def normalise_key(value: str) -> str:
 
 
 def is_degenerate_foil_leak(
+    original: str,
     candidate: str,
     foil_text: str,
     *,
     ngram_size: int = 4,
     overlap_threshold: float = 0.8,
 ) -> bool:
+    """Reject foil wording introduced by the edit, including clear derivations.
+
+    Only inserted and replaced text is inspected for token-level leakage. This avoids
+    rejecting an unrelated edit when the original scenario already contained a foil word.
+    """
+
     candidate_key = normalise_key(candidate)
+    original_key = normalise_key(original)
     foil_key = normalise_key(foil_text)
     if not candidate_key or not foil_key:
         return False
-    if foil_key in candidate_key:
+    if foil_key in candidate_key and foil_key not in original_key:
+        return True
+
+    changed_text = " ".join(
+        span.modified
+        for span in word_diff(original, candidate)
+        if span.type in {"insert", "replace"} and span.modified
+    )
+    changed_key = normalise_key(changed_text)
+    if not changed_key:
+        return False
+    if foil_key in changed_key:
+        return True
+
+    changed_words = WORD_RE.findall(changed_key)
+    foil_words = WORD_RE.findall(foil_key)
+    foil_content_words = [word for word in foil_words if word not in MORPH_STOPWORDS]
+    allow_generic_morphology = (
+        0 < len(foil_content_words) <= 3
+        and any(word in _EMOTION_FAMILY_BY_WORD for word in foil_content_words)
+    )
+    if any(
+        _morphologically_related(
+            changed_word,
+            foil_word,
+            allow_generic=allow_generic_morphology,
+        )
+        for changed_word in changed_words
+        for foil_word in foil_words
+    ):
         return True
 
     foil_ngrams = _word_ngrams(foil_key, ngram_size)
     if not foil_ngrams:
         return False
 
-    candidate_ngrams = _word_ngrams(candidate_key, ngram_size)
-    if not candidate_ngrams:
+    changed_ngrams = _word_ngrams(changed_key, ngram_size)
+    if not changed_ngrams:
         return False
 
-    overlap = len(foil_ngrams & candidate_ngrams) / len(foil_ngrams)
+    overlap = len(foil_ngrams & changed_ngrams) / len(foil_ngrams)
     return overlap >= overlap_threshold
 
 
@@ -52,3 +147,36 @@ def _word_ngrams(value: str, ngram_size: int) -> set[tuple[str, ...]]:
         tuple(words[index : index + ngram_size])
         for index in range(0, len(words) - ngram_size + 1)
     }
+
+
+def _morphologically_related(
+    candidate_word: str,
+    foil_word: str,
+    *,
+    allow_generic: bool,
+) -> bool:
+    if candidate_word in MORPH_STOPWORDS or foil_word in MORPH_STOPWORDS:
+        return False
+
+    candidate_family = _EMOTION_FAMILY_BY_WORD.get(candidate_word)
+    foil_family = _EMOTION_FAMILY_BY_WORD.get(foil_word)
+    if candidate_family is not None and candidate_family == foil_family:
+        return True
+
+    # Long cause/behaviour options naturally share ordinary scenario nouns and verbs.
+    # Generic surface similarity is useful only for short label-like foils.
+    if not allow_generic:
+        return False
+    if min(len(candidate_word), len(foil_word)) < 4:
+        return False
+    if candidate_word == foil_word:
+        return True
+    common_prefix = 0
+    for left, right in zip(candidate_word, foil_word, strict=False):
+        if left != right:
+            break
+        common_prefix += 1
+    return (
+        common_prefix >= 4
+        and SequenceMatcher(None, candidate_word, foil_word).ratio() >= 0.65
+    )

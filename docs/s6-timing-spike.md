@@ -31,5 +31,6 @@ target answer, so the observed flip rate was 0/3.
 proposer, deterministic span replacement, frozen target verification, accounting,
 and asynchronous job path execute end to end. It does not establish S6 quality or
 latency for the full dataset. A larger fixed-subset run should report parsing and
-guard rejection counts alongside flip rate, because those guard-level counters are
-not exposed by the current API payload.
+guard rejection counts alongside flip rate. Those counters are now exposed through
+`proposer_diagnostics`; this historical spike predates the grounded-diversity and
+bounded-repair changes and must not be reported as their post-change evaluation.

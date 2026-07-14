@@ -1,7 +1,9 @@
 import logging
 import re
+from dataclasses import dataclass
 from typing import Any
 
+from app.proposer.clients import ProposerCompletion
 from app.proposer.concepts import normalise_concept_class
 from app.proposer.json_utils import load_json_payload
 from app.strategies.base import ConceptEdit
@@ -9,41 +11,55 @@ from app.strategies.base import ConceptEdit
 logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class ConceptEditParseResult:
+    edits: list[ConceptEdit]
+    raw_candidates: int
+    parsed_candidates: int
+
+
 def parse_concept_edits(
-    raw: str,
+    raw: str | ProposerCompletion,
     *,
     limit: int,
     allowed_concepts: tuple[str, ...],
 ) -> list[ConceptEdit]:
+    return parse_concept_edits_with_diagnostics(
+        raw,
+        limit=limit,
+        allowed_concepts=allowed_concepts,
+    ).edits
+
+
+def parse_concept_edits_with_diagnostics(
+    raw: str | ProposerCompletion,
+    *,
+    limit: int,
+    allowed_concepts: tuple[str, ...],
+) -> ConceptEditParseResult:
     if limit <= 0:
-        return []
-    payload = load_json_payload(raw)
+        return ConceptEditParseResult([], 0, 0)
+    raw_text = raw.content if isinstance(raw, ProposerCompletion) else raw
+    payload = load_json_payload(raw_text)
     if payload is None:
-        return []
+        return ConceptEditParseResult([], 0, 0)
 
     items = payload.get("edits") if isinstance(payload, dict) else payload
     if not isinstance(items, list):
-        return []
+        return ConceptEditParseResult([], 0, 0)
 
     allowed = set(allowed_concepts)
     edits: list[ConceptEdit] = []
-    seen: set[tuple[str, str, str]] = set()
     for item in items:
         edit = _coerce_concept_edit(item, allowed)
         if edit is None:
             continue
-        key = (
-            edit.concept_class,
-            _normalise_text(edit.original_span),
-            _normalise_text(edit.replacement_span),
-        )
-        if key in seen:
-            continue
-        seen.add(key)
         edits.append(edit)
-        if len(edits) >= limit:
-            break
-    return edits
+    return ConceptEditParseResult(
+        edits=edits[:limit],
+        raw_candidates=len(items),
+        parsed_candidates=len(edits),
+    )
 
 
 def _coerce_concept_edit(item: Any, allowed: set[str]) -> ConceptEdit | None:

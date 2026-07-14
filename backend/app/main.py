@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import counterfactual, dashboard, health, models, predict, scenarios
+from app.api.routes import comparison, counterfactual, dashboard, health, models, predict, scenarios
 from app.core.config import get_settings
 
 
@@ -22,6 +22,7 @@ def create_app() -> FastAPI:
     api.include_router(scenarios.router, prefix="/scenarios", tags=["scenarios"])
     api.include_router(predict.router, prefix="/predict", tags=["predict"])
     api.include_router(counterfactual.router, prefix="/counterfactual", tags=["counterfactual"])
+    api.include_router(comparison.router, prefix="/comparison", tags=["comparison"])
     api.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
     return api
 

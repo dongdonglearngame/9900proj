@@ -1,7 +1,7 @@
 import re
 from dataclasses import replace
 
-from app.strategies.base import ConceptEdit
+from app.strategies.base import ConceptEdit, ConceptEditKey
 
 CONCEPT_CLASSES = (
     "relationship",
@@ -43,6 +43,19 @@ def normalise_concept_class(value: str) -> str | None:
     return canonical if canonical in CONCEPT_CLASSES else None
 
 
+def concept_edit_key(edit: ConceptEdit) -> ConceptEditKey:
+    target_value = edit.target_value or edit.replacement_span
+    return (
+        edit.concept_class,
+        normalise_concept_text(edit.original_span),
+        normalise_concept_text(target_value),
+    )
+
+
+def concept_span_key(edit: ConceptEdit) -> tuple[str, str]:
+    return edit.concept_class, normalise_concept_text(edit.original_span)
+
+
 def apply_concept_edit(
     scenario: str,
     edit: ConceptEdit,
@@ -67,7 +80,9 @@ def apply_concept_edit(
     match = matches[0]
     actual_original = match.group(0)
     replacement_span = edit.replacement_span.strip()
-    if not replacement_span or _normalise_text(actual_original) == _normalise_text(
+    if not replacement_span or normalise_concept_text(
+        actual_original
+    ) == normalise_concept_text(
         replacement_span
     ):
         return None
@@ -88,5 +103,5 @@ def describe_concept_edit(edit: ConceptEdit) -> str:
     )
 
 
-def _normalise_text(value: str) -> str:
+def normalise_concept_text(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip().casefold()

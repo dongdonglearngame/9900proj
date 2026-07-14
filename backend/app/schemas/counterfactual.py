@@ -12,6 +12,7 @@ from app.schemas.common import (
 )
 from app.schemas.job import JobPhase, JobStatus
 from app.schemas.metrics import CounterfactualMetrics
+from app.schemas.proposer import ProposerDiagnostics
 
 
 class StrategyInfo(APIModel):
@@ -26,6 +27,7 @@ class StrategyListResponse(APIModel):
 
 class CounterfactualCreateRequest(APIModel):
     question_id: str | None = None
+    experiment_run_id: str | None = None
     scenario: str
     choices: ChoiceMap
     model: str
@@ -82,6 +84,7 @@ class ConceptEditPayload(APIModel):
 
 class CounterfactualResultPayload(APIModel):
     status: Literal["success", "not_found", "failed"]
+    experiment_run_id: str | None = None
     strategy_id: str
     original_answer: ChoiceLetter
     foil: ChoiceLetter
@@ -92,6 +95,7 @@ class CounterfactualResultPayload(APIModel):
     new_prediction: PredictionSnapshot | None = None
     diff: list[DiffSpan]
     metrics: CounterfactualMetrics
+    proposer_diagnostics: ProposerDiagnostics | None = None
     message: str | None = None
     concept_edit: ConceptEditPayload | None = None
 

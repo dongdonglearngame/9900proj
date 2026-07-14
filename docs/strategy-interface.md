@@ -26,6 +26,8 @@ prompts, change decoding settings, or pass the foil into target prediction.
 and can propose either full candidate rewrites through `propose(...)` or typed,
 single-span concept interventions through `propose_concept_edits(...)`. It is
 separate from the frozen target harness and must not use the prediction cache.
+S6 may call `repair_concept_edit(...)` at most once per run to correct an invalid
+`original_span`; the repair must preserve the concept class and replacement.
 
 The target (`model.target_predict`) and the methods exposed by the injected
 `proposer` harness are the two search capabilities. Adding a strategy that reuses
@@ -50,15 +52,19 @@ require changes to service or API route code.
 Rules:
 
 - `model.target_predict(scenario, choices)` must be the only target-model path.
-- `proposer.propose(...)` and `proposer.propose_concept_edits(...)` are the only
-  generative proposer paths.
+- Methods exposed by the injected proposer harness, including `propose(...)`,
+  `infill(...)`, `propose_concept_edits(...)`, and `repair_concept_edit(...)`, must be
+  the only generative paths.
 - The strategy may see `foil`, but the target prompt must not.
 - Respect `budget`.
 - Record failed attempts when useful.
+- Report candidate guard outcomes through the shared proposer diagnostics helper.
 - Do not compute shared metrics inside the strategy.
 
 S6 uses causal-inspired concept interventions rather than claiming formally
 identified causal effects. Each successful S6 result carries the final concept
 class and exact source/replacement spans. A postprocessor that changes those
 spans must update the metadata or the service falls back to the verified raw
-result.
+result. S6 passes prior `(concept_class, original_span, target_value)` tuples back
+to the proposer, prioritises unused concept/span pairs deterministically, and
+requires every repaired span to be a unique contiguous substring of the scenario.
