@@ -39,7 +39,7 @@ def _new_experiment_run(
 
 
 class ExperimentRunRepository:
-    """Stores reproducible batch-comparison run metadata."""
+    """Stores reproducible batch-comparison run metadata in SQLite."""
 
     def __init__(
         self,
@@ -94,8 +94,8 @@ class ExperimentRunRepository:
             session_iterator.close()
 
 
-class MemoryExperimentRunRepository:
-    """In-memory ExperimentRun storage for mock and isolated test modes."""
+class InMemoryExperimentRunRepository:
+    """In-memory run metadata store for mock and isolated test modes."""
 
     def __init__(self) -> None:
         self._runs: dict[str, ExperimentRun] = {}

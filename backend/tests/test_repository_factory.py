@@ -6,7 +6,7 @@ from app.db.session import create_configured_engine
 from app.repositories.checkpointing_job_repo import CheckpointingJobRepository
 from app.repositories.experiment_run_repo import (
     ExperimentRunRepository,
-    MemoryExperimentRunRepository,
+    InMemoryExperimentRunRepository,
 )
 from app.repositories.factory import RepositoryFactory
 from app.repositories.job_repo import JobRepository
@@ -20,8 +20,9 @@ def test_memory_factory_reuses_repository_instances() -> None:
     assert factory.get_job_repository() is factory.get_job_repository()
     assert factory.get_prediction_repository() is factory.get_prediction_repository()
     assert factory.get_scenario_repository() is factory.get_scenario_repository()
+
     run_repo = factory.get_experiment_run_repository()
-    assert isinstance(run_repo, MemoryExperimentRunRepository)
+    assert isinstance(run_repo, InMemoryExperimentRunRepository)
     created = run_repo.create(
         name="memory run",
         model="mock",
