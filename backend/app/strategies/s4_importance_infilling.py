@@ -1,5 +1,7 @@
+import logging
 import re
 from dataclasses import dataclass
+from typing import Literal
 
 from app.core.config import get_settings
 from app.harness.target_predict import PredictionResult
@@ -20,6 +22,15 @@ WORD_RE = re.compile(r"[A-Za-z0-9]+(?:'[A-Za-z0-9]+)?")
 MASK_TOKEN = "[MASK]"
 AVOID_WINDOW = 8
 DEFAULT_MAX_IMPORTANCE_CANDIDATES = 32
+LOGPROB_DELTA_MODE = "foil_logprob_delta"
+ANSWER_CHANGE_FALLBACK_MODE = "answer_change_fallback"
+
+logger = logging.getLogger(__name__)
+
+ImportanceScoringMode = Literal[
+    "foil_logprob_delta",
+    "answer_change_fallback",
+]
 
 STOPWORDS = {
     "a",
@@ -85,7 +96,14 @@ class TokenCandidate:
 class ImportanceRecord:
     token: TokenCandidate
     score: float
+    scoring_mode: ImportanceScoringMode
     prediction: PredictionResult
+
+
+@dataclass(frozen=True)
+class ImportanceScore:
+    value: float
+    mode: ImportanceScoringMode
 
 
 @dataclass(frozen=True)
@@ -149,13 +167,14 @@ class S4ImportanceInfillingStrategy(CounterfactualStrategy):
             return model.target_predict(candidate_scenario, choices)
 
         baseline = target_predict(scenario)
+        importance_budget = _importance_scoring_budget(budget)
         ranked = self._rank_tokens(
             scenario=scenario,
             choices=choices,
             model_predict=target_predict,
             baseline=baseline,
             foil=foil,
-            budget_remaining=max(0, budget - target_calls - 1),
+            budget_remaining=importance_budget,
         )
         if not ranked:
             return self._not_found(
@@ -226,6 +245,7 @@ class S4ImportanceInfillingStrategy(CounterfactualStrategy):
                         success=success,
                         edit_description=_edit_description(
                             spans=spans,
+                            scoring_modes={record.scoring_mode for record in selected},
                             mask_count=mask_count,
                             total_ranked=len(ranked),
                             rationale=edit.rationale,
@@ -276,15 +296,23 @@ class S4ImportanceInfillingStrategy(CounterfactualStrategy):
                 continue
 
             prediction = model_predict(occluded)
+            importance = _importance_score(baseline, prediction, foil)
             records.append(
                 ImportanceRecord(
                     token=token,
-                    score=_importance_score(baseline, prediction, foil),
+                    score=importance.value,
+                    scoring_mode=importance.mode,
                     prediction=prediction,
                 )
             )
 
-        return sorted(records, key=lambda record: (-record.score, record.token.start))
+        if any(record.scoring_mode == ANSWER_CHANGE_FALLBACK_MODE for record in records):
+            logger.warning(
+                "S4 importance scoring is using answer-change fallback for candidates "
+                "without foil logprobs"
+            )
+
+        return sorted(records, key=_importance_sort_key)
 
     def _not_found(
         self,
@@ -342,31 +370,37 @@ def _importance_score(
     baseline: PredictionResult,
     occluded: PredictionResult,
     foil: str,
-) -> float:
-    score = 0.0
-    if occluded.answer == foil and baseline.answer != foil:
-        score += 100.0
-    elif occluded.answer != baseline.answer:
-        score += 40.0
-
-    baseline_logprobs = baseline.option_logprobs or {}
-    occluded_logprobs = occluded.option_logprobs or {}
-    score += 10.0 * _positive_delta(
-        occluded_logprobs.get(foil),
-        baseline_logprobs.get(foil),
-    )
-    if baseline.answer is not None:
-        score += 10.0 * _positive_delta(
-            baseline_logprobs.get(baseline.answer),
-            occluded_logprobs.get(baseline.answer),
+) -> ImportanceScore:
+    baseline_foil = (baseline.option_logprobs or {}).get(foil)
+    occluded_foil = (occluded.option_logprobs or {}).get(foil)
+    if baseline_foil is not None and occluded_foil is not None:
+        return ImportanceScore(
+            value=occluded_foil - baseline_foil,
+            mode=LOGPROB_DELTA_MODE,
         )
-    return score
+
+    if occluded.answer == foil and baseline.answer != foil:
+        fallback_score = 2.0
+    elif occluded.answer != baseline.answer:
+        fallback_score = 1.0
+    else:
+        fallback_score = 0.0
+    return ImportanceScore(
+        value=fallback_score,
+        mode=ANSWER_CHANGE_FALLBACK_MODE,
+    )
 
 
-def _positive_delta(after: float | None, before: float | None) -> float:
-    if after is None or before is None:
-        return 0.0
-    return max(0.0, after - before)
+def _importance_sort_key(record: ImportanceRecord) -> tuple[int, float, int]:
+    mode_priority = 0 if record.scoring_mode == LOGPROB_DELTA_MODE else 1
+    return (mode_priority, -record.score, record.token.start)
+
+
+def _importance_scoring_budget(total_budget: int) -> int:
+    if total_budget <= 0:
+        return 0
+    verification_reserve = max(1, total_budget // 3)
+    return max(0, total_budget - 1 - verification_reserve)
 
 
 def _merge_ranked_tokens(
@@ -424,16 +458,19 @@ def _preserves_unmasked_text(masked_scenario: str, modified_scenario: str) -> bo
 def _edit_description(
     *,
     spans: list[MaskedSpan],
+    scoring_modes: set[ImportanceScoringMode],
     mask_count: int,
     total_ranked: int,
     rationale: str | None,
 ) -> str:
     masked_text = " | ".join(f"'{span.text}'" for span in spans)
     importance_score = sum(span.score for span in spans)
+    scoring_mode = "+".join(sorted(scoring_modes))
     proportion = mask_count / max(1, total_ranked)
     description = (
         f"mask_count={mask_count}; mask_proportion={proportion:.4f}; "
-        f"importance_score={importance_score:.4f}; masked_spans={masked_text}"
+        f"importance_score={importance_score:.4f}; scoring_mode={scoring_mode}; "
+        f"masked_spans={masked_text}"
     )
     if rationale:
         description = f"{description}; rationale={rationale}"

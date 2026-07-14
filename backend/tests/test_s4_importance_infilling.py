@@ -1,6 +1,11 @@
 from app.harness.target_predict import PredictionResult
 from app.strategies.base import ProposedEdit
-from app.strategies.s4_importance_infilling import S4ImportanceInfillingStrategy
+from app.strategies.s4_importance_infilling import (
+    ANSWER_CHANGE_FALLBACK_MODE,
+    LOGPROB_DELTA_MODE,
+    S4ImportanceInfillingStrategy,
+    _importance_score,
+)
 
 CHOICES = {
     "A": "Ignore the texts and continue sleeping",
@@ -84,6 +89,16 @@ class NonFlippingTarget:
         return _prediction("A")
 
 
+class AlwaysOriginalTarget:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def target_predict(self, scenario: str, choices: dict[str, str]) -> PredictionResult:
+        _ = choices
+        self.calls.append(scenario)
+        return _prediction("A", a_logprob=-0.1, c_logprob=-2.0)
+
+
 class FakeInfillProposer:
     def __init__(self, rounds: list[list[ProposedEdit]] | None = None) -> None:
         self.rounds = rounds
@@ -131,6 +146,56 @@ class FakeInfillProposer:
         return self.rounds[index] if index < len(self.rounds) else []
 
 
+class UniqueInfillProposer(FakeInfillProposer):
+    def infill(
+        self,
+        original_scenario: str,
+        masked_scenario: str,
+        choices: dict[str, str],
+        foil: str,
+        count: int,
+        avoid: list[str] | None = None,
+    ) -> list[ProposedEdit]:
+        _ = original_scenario
+        _ = choices
+        _ = foil
+        _ = count
+        self.infill_calls.append(masked_scenario)
+        self.avoid_history.append(avoid)
+        replacement = f"neutral{len(self.infill_calls)}"
+        return [
+            ProposedEdit(
+                modified_scenario=masked_scenario.replace("[MASK]", replacement),
+                rationale="bounded verification candidate",
+            )
+        ]
+
+
+def test_s4_logprob_ranking_does_not_mix_in_answer_change_bonuses() -> None:
+    baseline = _prediction("A", c_logprob=-5.0)
+    unrelated_answer_change = _prediction("B", c_logprob=-5.0)
+    useful_foil_movement = _prediction("A", c_logprob=-1.5)
+
+    unrelated_score = _importance_score(baseline, unrelated_answer_change, "C")
+    useful_score = _importance_score(baseline, useful_foil_movement, "C")
+
+    assert unrelated_score.mode == LOGPROB_DELTA_MODE
+    assert unrelated_score.value == 0.0
+    assert useful_score.mode == LOGPROB_DELTA_MODE
+    assert useful_score.value == 3.5
+    assert useful_score.value > unrelated_score.value
+
+
+def test_s4_answer_change_scoring_is_only_the_missing_logprob_fallback() -> None:
+    baseline = _prediction("A", c_logprob=None)
+    changed_answer = _prediction("B", c_logprob=None)
+
+    score = _importance_score(baseline, changed_answer, "C")
+
+    assert score.mode == ANSWER_CHANGE_FALLBACK_MODE
+    assert score.value == 1.0
+
+
 def test_s4_occlusion_ranks_top_token_and_masks_it_for_infill() -> None:
     scenario = "Regina is texting in the middle of the night about feeling lonely."
     target = ImportanceTarget()
@@ -158,6 +223,7 @@ def test_s4_occlusion_ranks_top_token_and_masks_it_for_infill() -> None:
     assert "mask_count=1" in result.attempts[0].edit_description
     assert "masked_spans='night'" in result.attempts[0].edit_description
     assert "importance_score=" in result.attempts[0].edit_description
+    assert "scoring_mode=foil_logprob_delta" in result.attempts[0].edit_description
 
 
 def test_s4_falls_back_to_answer_change_scoring_without_logprobs() -> None:
@@ -179,6 +245,8 @@ def test_s4_falls_back_to_answer_change_scoring_without_logprobs() -> None:
 
     assert result.status == "success"
     assert proposer.infill_calls[0].endswith("middle of the [MASK] about feeling lonely.")
+    assert result.attempts[0].edit_description is not None
+    assert "scoring_mode=answer_change_fallback" in result.attempts[0].edit_description
 
 
 def test_s4_increases_mask_proportion_until_smallest_successful_flip() -> None:
@@ -254,6 +322,32 @@ def test_s4_budget_exhaustion_returns_not_found() -> None:
     assert result.new_answer is None
     assert len(target.calls) == 3
     assert len(result.attempts) == 1
+
+
+def test_s4_reserves_one_third_of_budget_for_candidate_verification() -> None:
+    scenario = (
+        "Regina quietly describes difficult workplace conflict during yesterday's "
+        "stressful evening conversation."
+    )
+    target = AlwaysOriginalTarget()
+    proposer = UniqueInfillProposer()
+
+    result = S4ImportanceInfillingStrategy(
+        candidates_per_round=1,
+        max_importance_candidates=32,
+    ).generate(
+        scenario=scenario,
+        choices=CHOICES,
+        model=target,
+        foil="C",
+        budget=10,
+        proposer=proposer,
+    )
+
+    assert result.status == "not_found"
+    assert len(target.calls) == 10
+    assert len(proposer.infill_calls) == 3
+    assert len(result.attempts) == 3
 
 
 def test_s4_rejects_leaks_duplicates_and_outside_mask_edits() -> None:
