@@ -5,6 +5,7 @@ from typing import Literal
 
 from app.core.config import get_settings
 from app.harness.target_predict import PredictionResult
+from app.proposer.harness import record_candidate_outcome
 from app.strategies._candidate_filters import (
     exceeds_changed_fraction,
     is_degenerate_foil_leak,
@@ -213,18 +214,22 @@ class S4ImportanceInfillingStrategy(CounterfactualStrategy):
                 modified_scenario = edit.modified_scenario.strip()
                 key = normalise_key(modified_scenario)
                 if not key or key in seen:
+                    record_candidate_outcome(proposer, "empty_or_duplicate")
                     continue
 
                 seen.add(key)
                 if MASK_TOKEN in modified_scenario:
+                    record_candidate_outcome(proposer, "constraint_violation")
                     recent_rejects.append(modified_scenario)
                     continue
 
                 if not _preserves_unmasked_text(masked_scenario, modified_scenario):
+                    record_candidate_outcome(proposer, "constraint_violation")
                     recent_rejects.append(modified_scenario)
                     continue
 
-                if is_degenerate_foil_leak(modified_scenario, foil_text):
+                if is_degenerate_foil_leak(scenario, modified_scenario, foil_text):
+                    record_candidate_outcome(proposer, "foil_leak")
                     recent_rejects.append(modified_scenario)
                     continue
 
@@ -233,10 +238,13 @@ class S4ImportanceInfillingStrategy(CounterfactualStrategy):
                     modified_scenario,
                     self._max_changed_fraction,
                 ):
+                    record_candidate_outcome(proposer, "changed_fraction")
                     recent_rejects.append(modified_scenario)
                     continue
 
+                record_candidate_outcome(proposer, "unique_valid")
                 prediction = target_predict(modified_scenario)
+                record_candidate_outcome(proposer, "target_verified")
                 success = prediction.answer == foil
                 attempts.append(
                     AttemptRecord(

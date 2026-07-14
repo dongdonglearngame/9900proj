@@ -13,3 +13,8 @@ class CounterfactualMetrics(APIModel):
     proposer_calls: int
     total_target_calls: int
     runtime_seconds: float
+    foil_logprob_delta: float | None = None
+    mean_foil_logprob_delta: float | None = None
+    max_foil_logprob_delta: float | None = None
+    positive_delta_rate: float | None = None
+    logprob_coverage: float | None = None

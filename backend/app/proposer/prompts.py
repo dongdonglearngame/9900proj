@@ -23,10 +23,18 @@ def build_proposer_messages(
             "content": (
                 "You propose minimal counterfactual rewrites for emotion-reasoning "
                 "multiple-choice scenarios. You may see the target foil, but the frozen "
-                "target model will not. Rewrite only the scenario, keep it fluent and "
-                "realistic, do not mention option letters, and do not copy any option "
-                "answer text into the scenario. Return JSON only: "
-                '{"rewrites":[{"modified_scenario":"...","rationale":"..."}]}.'
+                "target model will not. Change an underlying event, outcome, relationship, "
+                "or observable behaviour rather than directly naming or paraphrasing the "
+                "target emotion or answer. Rewrite only the scenario, keep it fluent and "
+                "realistic, do not mention option letters, and do not copy or morphologically "
+                "derive any option answer text in the scenario. Return exactly the requested "
+                "number of distinct rewrites and use a different change mechanism where "
+                "possible. Treat avoid entries as prior failures and do not repeat them. "
+                "Return JSON only; modified_scenario is required and changed_span, "
+                "change_type, and rationale are optional: "
+                '{"rewrites":[{"modified_scenario":"...","changed_span":"...",'
+                '"change_type":"event|outcome|relationship|behaviour",'
+                '"rationale":"..."}]}.'
             ),
         },
         {

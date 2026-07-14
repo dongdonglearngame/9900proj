@@ -597,6 +597,11 @@ class BatchComparisonService:
             total_target_calls=metrics.total_target_calls,
             runtime_seconds=metrics.runtime_seconds,
             original_logprobs=prediction.option_logprobs,
+            foil_logprob_delta=metrics.foil_logprob_delta,
+            mean_foil_logprob_delta=metrics.mean_foil_logprob_delta,
+            max_foil_logprob_delta=metrics.max_foil_logprob_delta,
+            positive_delta_rate=metrics.positive_delta_rate,
+            logprob_coverage=metrics.logprob_coverage,
             modified_scenario=payload.modified_scenario,
             message=payload.message,
             result=payload,
@@ -689,6 +694,21 @@ class BatchComparisonService:
                     ),
                     avg_proposer_calls=_avg([row.proposer_calls for row in attempted]),
                     avg_runtime_seconds=_avg([row.runtime_seconds for row in attempted]),
+                    avg_foil_logprob_delta=_avg(
+                        [row.foil_logprob_delta for row in attempted]
+                    ),
+                    avg_mean_foil_logprob_delta=_avg(
+                        [row.mean_foil_logprob_delta for row in attempted]
+                    ),
+                    avg_max_foil_logprob_delta=_avg(
+                        [row.max_foil_logprob_delta for row in attempted]
+                    ),
+                    avg_positive_delta_rate=_avg(
+                        [row.positive_delta_rate for row in attempted]
+                    ),
+                    avg_logprob_coverage=_avg(
+                        [row.logprob_coverage for row in attempted]
+                    ),
                 )
             )
         return summaries

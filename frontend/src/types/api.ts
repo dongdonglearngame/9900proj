@@ -95,6 +95,41 @@ export interface CounterfactualMetrics {
   proposer_calls: number;
   total_target_calls: number;
   runtime_seconds: number;
+  foil_logprob_delta: number | null;
+  mean_foil_logprob_delta: number | null;
+  max_foil_logprob_delta: number | null;
+  positive_delta_rate: number | null;
+  logprob_coverage: number | null;
+}
+
+export interface ProposerCallDiagnostics {
+  requested_candidates: number;
+  seed: number;
+  num_predict: number;
+  temperature: number;
+  raw_candidates: number;
+  parsed_candidates: number;
+  delivered_candidates: number;
+  done_reason: string | null;
+  eval_count: number | null;
+  response_tokens: number | null;
+  latency_seconds: number;
+}
+
+export interface ProposerDiagnostics {
+  calls: ProposerCallDiagnostics[];
+  requested_candidates: number;
+  raw_candidates: number;
+  parsed_candidates: number;
+  delivered_candidates: number;
+  unique_valid_candidates: number;
+  target_verified_candidates: number;
+  guard_rejections: Record<string, number>;
+  raw_requested_yield: number | null;
+  parsed_raw_yield: number | null;
+  unique_valid_requested_yield: number | null;
+  target_verified_parsed_yield: number | null;
+  target_verified_delivered_yield: number | null;
 }
 
 export interface CounterfactualResult {
@@ -109,6 +144,7 @@ export interface CounterfactualResult {
   new_prediction: PredictionSnapshot | null;
   diff: DiffSpan[];
   metrics: CounterfactualMetrics;
+  proposer_diagnostics: ProposerDiagnostics | null;
   message: string | null;
 }
 
@@ -174,6 +210,11 @@ export interface ComparisonRow {
   total_target_calls: number;
   runtime_seconds: number;
   original_logprobs: OptionScoreMap;
+  foil_logprob_delta: number | null;
+  mean_foil_logprob_delta: number | null;
+  max_foil_logprob_delta: number | null;
+  positive_delta_rate: number | null;
+  logprob_coverage: number | null;
   modified_scenario: string | null;
   message: string | null;
   result: CounterfactualResult | null;
@@ -196,6 +237,11 @@ export interface ComparisonStrategySummary {
   avg_total_target_calls: number | null;
   avg_proposer_calls: number | null;
   avg_runtime_seconds: number | null;
+  avg_foil_logprob_delta: number | null;
+  avg_mean_foil_logprob_delta: number | null;
+  avg_max_foil_logprob_delta: number | null;
+  avg_positive_delta_rate: number | null;
+  avg_logprob_coverage: number | null;
 }
 
 export interface SelectedScenarioComparison {

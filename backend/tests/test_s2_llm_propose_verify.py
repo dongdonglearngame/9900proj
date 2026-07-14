@@ -163,6 +163,25 @@ def test_s2_rejects_foil_text_leak_before_target_verification() -> None:
     assert target.calls == []
 
 
+def test_s2_rejects_morphological_foil_leak_before_target_verification() -> None:
+    choices = {**CHOICES, "C": "relief"}
+    proposer = FakeProposer([[edit("Regina felt relieved after hearing the news.")]])
+    target = FakeTargetModel()
+
+    result = S2LlmProposeVerifyStrategy(max_rounds=1, candidates_per_round=2).generate(
+        scenario="Regina heard the news and considered what it meant.",
+        choices=choices,
+        model=target,
+        foil="C",
+        budget=2,
+        proposer=proposer,
+    )
+
+    assert result.status == "not_found"
+    assert result.attempts == []
+    assert target.calls == []
+
+
 def test_s2_skips_oversized_rewrites_without_target_call() -> None:
     long_rewrite = " ".join(f"new{i}" for i in range(40))
     proposer = FakeProposer([[edit(long_rewrite)]])
@@ -204,8 +223,30 @@ def test_s2_dedupes_across_rounds_and_passes_avoid_rejects() -> None:
 
     assert result.status == "success"
     assert proposer.calls == 2
-    assert proposer.avoid_history[1] == [first]
+    assert proposer.avoid_history[1] == [f"target_answer=A: {first}"]
     assert target.calls == [first, second]
+
+
+def test_s2_ranks_minimal_candidate_before_larger_rewrite() -> None:
+    larger = REGINA_SCENARIO.replace(
+        "middle of the night",
+        "early morning after a long and difficult journey",
+    )
+    minimal = REGINA_SCENARIO.replace("middle of the night", "early morning")
+    proposer = FakeProposer([[edit(larger), edit(minimal)]])
+    target = FakeTargetModel(flip_token="will not flip")
+
+    result = S2LlmProposeVerifyStrategy(max_rounds=1, candidates_per_round=2).generate(
+        scenario=REGINA_SCENARIO,
+        choices=CHOICES,
+        model=target,
+        foil="C",
+        budget=2,
+        proposer=proposer,
+    )
+
+    assert result.status == "not_found"
+    assert target.calls == [minimal, larger]
 
 
 def test_counterfactual_api_runs_s2_in_mock_mode() -> None:
@@ -232,3 +273,19 @@ def test_counterfactual_api_runs_s2_in_mock_mode() -> None:
     assert job["progress"]["proposer_calls"] == 1
     assert job["result"]["metrics"]["proposer_calls"] == 1
     assert job["result"]["metrics"]["search_calls"] == 1
+    diagnostics = job["result"]["proposer_diagnostics"]
+    assert diagnostics["requested_candidates"] == 4
+    assert diagnostics["raw_candidates"] == 2
+    assert diagnostics["parsed_candidates"] == 2
+    assert diagnostics["unique_valid_candidates"] == 2
+    assert diagnostics["target_verified_candidates"] == 1
+    assert diagnostics["raw_requested_yield"] == 0.5
+    assert diagnostics["target_verified_parsed_yield"] == 0.5
+    assert diagnostics["calls"][0]["done_reason"] == "stop"
+    assert diagnostics["calls"][0]["num_predict"] == 1024
+    metrics = job["result"]["metrics"]
+    assert metrics["foil_logprob_delta"] == 1.7
+    assert metrics["mean_foil_logprob_delta"] == 1.7
+    assert metrics["max_foil_logprob_delta"] == 1.7
+    assert metrics["positive_delta_rate"] == 1.0
+    assert metrics["logprob_coverage"] == 1.0

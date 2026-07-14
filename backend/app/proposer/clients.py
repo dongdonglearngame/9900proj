@@ -1,19 +1,40 @@
 import json
 import re
+from dataclasses import dataclass
 from typing import Protocol
 
 import httpx
 
 
+@dataclass(frozen=True)
+class ProposerCompletion:
+    content: str
+    done_reason: str | None = None
+    eval_count: int | None = None
+
+    @property
+    def response_tokens(self) -> int | None:
+        # Ollama reports generated response tokens as eval_count.
+        return self.eval_count
+
+
 class ProposerClient(Protocol):
-    def complete(self, messages: list[dict[str, str]], options: dict) -> str:
-        """One generative round-trip; returns raw assistant text."""
+    def complete(
+        self,
+        messages: list[dict[str, str]],
+        options: dict,
+    ) -> ProposerCompletion:
+        """Run one generative round-trip and retain response diagnostics."""
 
 
 class MockProposerClient:
     """Deterministic proposer used by mock mode and tests."""
 
-    def complete(self, messages: list[dict[str, str]], options: dict) -> str:
+    def complete(
+        self,
+        messages: list[dict[str, str]],
+        options: dict,
+    ) -> ProposerCompletion:
         _ = options
         payload = _payload_from_messages(messages)
         count = max(0, int(payload.get("count", 1)))
@@ -30,7 +51,10 @@ class MockProposerClient:
             {"modified_scenario": candidate, "rationale": rationale}
             for candidate in candidates
         ]
-        return json.dumps({"rewrites": rewrites})
+        return ProposerCompletion(
+            content=json.dumps({"rewrites": rewrites}),
+            done_reason="stop",
+        )
 
 
 class OllamaProposerClient:
@@ -41,7 +65,11 @@ class OllamaProposerClient:
         self._model = model
         self._timeout = timeout
 
-    def complete(self, messages: list[dict[str, str]], options: dict) -> str:
+    def complete(
+        self,
+        messages: list[dict[str, str]],
+        options: dict,
+    ) -> ProposerCompletion:
         payload = {
             "model": self._model,
             "messages": messages,
@@ -59,9 +87,17 @@ class OllamaProposerClient:
         data = response.json()
         message = data.get("message")
         if not isinstance(message, dict):
-            return ""
+            return ProposerCompletion(
+                content="",
+                done_reason=_optional_string(data.get("done_reason")),
+                eval_count=_optional_int(data.get("eval_count")),
+            )
         content = message.get("content")
-        return content if isinstance(content, str) else ""
+        return ProposerCompletion(
+            content=content if isinstance(content, str) else "",
+            done_reason=_optional_string(data.get("done_reason")),
+            eval_count=_optional_int(data.get("eval_count")),
+        )
 
 
 def _payload_from_messages(messages: list[dict[str, str]]) -> dict:
@@ -131,3 +167,11 @@ def _dedupe_preserving_order(values: list[str]) -> list[str]:
             seen.add(key)
             result.append(value)
     return result
+
+
+def _optional_string(value: object) -> str | None:
+    return value if isinstance(value, str) and value else None
+
+
+def _optional_int(value: object) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
