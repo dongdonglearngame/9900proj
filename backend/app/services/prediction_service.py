@@ -2,7 +2,7 @@ from functools import lru_cache
 
 from app.core.config import get_settings
 from app.db.hashing import prediction_cache_key
-from app.harness.target_predict import PredictionResult
+from app.harness.target_predict import TARGET_TEMPERATURE, PredictionResult
 from app.llm.mock_client import MockLLMClient
 from app.llm.ollama_client import OllamaClient
 from app.repositories.factory import get_prediction_repository
@@ -20,10 +20,12 @@ class PredictionService:
     def __init__(self) -> None:
         settings = get_settings()
         self._client = MockLLMClient() if settings.use_mock_llm else OllamaClient()
+        self._endpoint_type = "mock" if settings.use_mock_llm else "ollama_chat"
         self._repo = get_prediction_repository()
 
     def predict(self, request: PredictRequest) -> PredictionResponse:
         result = self.target_predict(
+            question_id=request.question_id,
             scenario=request.scenario,
             choices=request.choices,
             model=request.model,
@@ -35,19 +37,35 @@ class PredictionService:
         scenario: str,
         choices: dict[str, str],
         model: str,
+        question_id: str | None = None,
     ) -> PredictionResult:
+        settings = get_settings()
         cache_key = prediction_cache_key(
             model=model,
-            prompt_template_version=get_settings().target_prompt_version,
+            prompt_template_version=settings.target_prompt_version,
             scenario=scenario,
             choices=choices,
+            endpoint_type=self._endpoint_type,
+            top_logprobs=settings.top_logprobs,
+            target_num_predict=settings.target_num_predict,
+            target_temperature=TARGET_TEMPERATURE,
         )
         cached = self._repo.get(cache_key)
         if cached:
             return cached.with_cache_hit()
 
         result = self._client.predict(scenario=scenario, choices=choices, model=model)
-        self._repo.set(cache_key, result)
+        self._repo.set(
+            cache_key,
+            result,
+            question_id=question_id,
+            scenario=scenario,
+            choices=choices,
+            endpoint_type=self._endpoint_type,
+            top_logprobs=settings.top_logprobs,
+            target_num_predict=settings.target_num_predict,
+            target_temperature=TARGET_TEMPERATURE,
+        )
         return result
 
     def _to_response(self, result: PredictionResult) -> PredictionResponse:

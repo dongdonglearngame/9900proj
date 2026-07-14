@@ -35,6 +35,7 @@ class SQLiteJobRepository:
 
         record = CounterfactualJobRecord(
             id=job.job_id,
+            experiment_run_id=request.experiment_run_id,
             status=job.status,
             phase=job.phase,
             strategy_id=request.strategy_id,
