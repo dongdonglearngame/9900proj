@@ -63,3 +63,19 @@ Import EmoBench JSONL into SQLite:
 python -m app.scripts.load_emobench --input ..\data\raw\EU.jsonl
 python -m app.scripts.load_emobench --input ..\data\raw\EA.jsonl
 ```
+
+## Batch comparison
+
+Run a fixed subset through the same model, budget, and strategy list:
+
+```powershell
+python -m app.scripts.batch_run_counterfactuals `
+  --task_type EU `
+  --limit 20 `
+  --model llama3.2:3b `
+  --strategies s1_word_greedy,s2_llm_propose_verify `
+  --budget 20
+```
+
+The JSON output includes the captured `experiment_run_id`, per-strategy summary,
+individual success/not-found/failed/skipped rows, and explicit coverage metadata.

@@ -1,4 +1,7 @@
 import type {
+  ComparisonCreateRequest,
+  ComparisonCreateResponse,
+  ComparisonJob,
   CounterfactualCreateRequest,
   CounterfactualCreateResponse,
   CounterfactualJob,
@@ -69,4 +72,17 @@ export async function postCounterfactual(
 
 export async function getCounterfactualJob(jobId: string): Promise<CounterfactualJob> {
   return request<CounterfactualJob>(`/counterfactual/jobs/${jobId}`);
+}
+
+export async function postComparison(
+  payload: ComparisonCreateRequest,
+): Promise<ComparisonCreateResponse> {
+  return request<ComparisonCreateResponse>("/comparison", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getComparisonJob(jobId: string): Promise<ComparisonJob> {
+  return request<ComparisonJob>(`/comparison/jobs/${jobId}`);
 }
