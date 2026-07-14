@@ -102,8 +102,17 @@ def is_degenerate_foil_leak(
 
     changed_words = WORD_RE.findall(changed_key)
     foil_words = WORD_RE.findall(foil_key)
+    foil_content_words = [word for word in foil_words if word not in MORPH_STOPWORDS]
+    allow_generic_morphology = (
+        0 < len(foil_content_words) <= 3
+        and any(word in _EMOTION_FAMILY_BY_WORD for word in foil_content_words)
+    )
     if any(
-        _morphologically_related(changed_word, foil_word)
+        _morphologically_related(
+            changed_word,
+            foil_word,
+            allow_generic=allow_generic_morphology,
+        )
         for changed_word in changed_words
         for foil_word in foil_words
     ):
@@ -140,7 +149,12 @@ def _word_ngrams(value: str, ngram_size: int) -> set[tuple[str, ...]]:
     }
 
 
-def _morphologically_related(candidate_word: str, foil_word: str) -> bool:
+def _morphologically_related(
+    candidate_word: str,
+    foil_word: str,
+    *,
+    allow_generic: bool,
+) -> bool:
     if candidate_word in MORPH_STOPWORDS or foil_word in MORPH_STOPWORDS:
         return False
 
@@ -149,6 +163,10 @@ def _morphologically_related(candidate_word: str, foil_word: str) -> bool:
     if candidate_family is not None and candidate_family == foil_family:
         return True
 
+    # Long cause/behaviour options naturally share ordinary scenario nouns and verbs.
+    # Generic surface similarity is useful only for short label-like foils.
+    if not allow_generic:
+        return False
     if min(len(candidate_word), len(foil_word)) < 4:
         return False
     if candidate_word == foil_word:

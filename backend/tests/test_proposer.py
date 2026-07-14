@@ -151,6 +151,7 @@ def test_proposer_harness_records_output_length_diagnostics() -> None:
 
     assert [edit.modified_scenario for edit in edits] == ["one"]
     assert len(diagnostics) == 1
+    assert diagnostics[0].prompt_version == "s2-proposer-v2-event-grounded"
     assert diagnostics[0].requested_candidates == 4
     assert diagnostics[0].seed == 0
     assert diagnostics[0].num_predict == 512
@@ -183,6 +184,7 @@ def test_proposer_harness_increments_seed_for_bounded_refill() -> None:
 
 def test_proposer_harness_infill_builds_constrained_prompt_and_counts() -> None:
     calls = 0
+    diagnostics = []
     client = CapturingClient(
         raw=json.dumps(
             {
@@ -207,6 +209,7 @@ def test_proposer_harness_infill_builds_constrained_prompt_and_counts() -> None:
         seed=0,
         num_predict=512,
         on_call=record_call,
+        on_diagnostics=diagnostics.append,
     )
 
     edits = harness.infill(
@@ -218,6 +221,7 @@ def test_proposer_harness_infill_builds_constrained_prompt_and_counts() -> None:
     )
 
     assert calls == 1
+    assert diagnostics[0].prompt_version == "s4-infill-v1"
     assert edits[0].modified_scenario == "Regina texted in the early evening."
     assert client.messages is not None
     assert "Only replace each [MASK] span" in client.messages[0]["content"]

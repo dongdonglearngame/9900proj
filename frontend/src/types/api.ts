@@ -103,6 +103,7 @@ export interface CounterfactualMetrics {
 }
 
 export interface ProposerCallDiagnostics {
+  prompt_version: string;
   requested_candidates: number;
   seed: number;
   num_predict: number;

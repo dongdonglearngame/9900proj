@@ -20,31 +20,37 @@ pending until the S6 optimization stage is complete.
 | Frozen-harness flips | 1 | 4 |
 | Not found | 19 | 16 |
 | Failed | 0 | 0 |
-| Proposer calls | 39 | 31 |
-| Requested candidates | 138 | 111 |
-| Raw candidates | 37 | 69 |
-| Parsed candidates | 37 | 69 |
-| Delivered candidates | not recorded | 67 |
-| Unique valid candidates | not recorded | 50 |
-| Target-verified candidates | 30 | 45 |
-| Raw/requested yield | 0.2681 | 0.6216 |
-| Parsed/raw yield | 1.0000 | 1.0000 |
-| Unique-valid/requested yield | not recorded | 0.4505 |
-| Target-verified/parsed yield | not recorded | 0.6522 |
-| Target-verified/delivered yield | not recorded | 0.6716 |
+| Proposer calls | 39 | 30 |
+| Requested candidates | 138 | 106 |
+| Raw candidates | 37 | 65 |
+| Parsed candidates | 37 | 64 |
+| Delivered candidates | not recorded | 59 |
+| Unique valid candidates | not recorded | 52 |
+| Target-verified candidates | 30 | 48 |
+| Raw/requested yield | 0.2681 | 0.6132 |
+| Parsed/raw yield | 1.0000 | 0.9846 |
+| Unique-valid/requested yield | not recorded | 0.4906 |
+| Target-verified/parsed yield | not recorded | 0.7500 |
+| Target-verified/delivered yield | not recorded | 0.8136 |
 
 The initial 1/20 flip used a direct morphological cue and is not treated as credible
 evidence. The final four flips pass the lexical foil guard, but still require normal
 human review for semantic coherence before being promoted as demo examples.
 
+The provisional `0.75` raw/requested candidate-yield gate was not met: the measured
+value is `0.6132`. S2 does perform bounded strategy-level refill, which increased the
+number of candidates reaching target verification, but refill does not change this
+per-call yield ratio. This gate must remain recorded as unmet rather than being
+silently treated as passed.
+
 ## Guard and logprob diagnostics
 
-- Guard rejections: 1 duplicate/empty, 12 changed-fraction, 4 foil-leak.
-- Output termination: 29 `stop`, 0 `length`, and 2 responses without a reason.
-- Refill seeds: 20 calls used seed 0 and 11 second-round calls used seed 1.
-- Logprob coverage: 45/45 verified candidates.
-- Positive foil-logprob movement: 20/45 candidates (`0.4444`).
-- Mean of per-run mean foil-logprob deltas: `0.3273` over runs with covered attempts.
+- Guard rejections: 1 duplicate/empty, 6 changed-fraction, 0 foil-leak.
+- Output termination: 28 `stop`, 0 `length`, and 2 responses without a reason.
+- Refill seeds: 20 calls used seed 0 and 10 second-round calls used seed 1.
+- Logprob coverage: 48/48 verified candidates.
+- Positive foil-logprob movement: 20/48 candidates (`0.4167`).
+- Mean of per-run mean foil-logprob deltas: `0.3823` over runs with covered attempts.
 
 Missing logprobs are excluded from delta calculations. Coverage is always reported
 alongside the direction and magnitude statistics.

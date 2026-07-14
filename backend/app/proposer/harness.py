@@ -6,7 +6,12 @@ from time import perf_counter
 from typing import Any, Literal
 
 from app.proposer.clients import ProposerClient, ProposerCompletion
-from app.proposer.prompts import build_infill_messages, build_proposer_messages
+from app.proposer.prompts import (
+    S2_PROPOSER_PROMPT_VERSION,
+    S4_INFILL_PROMPT_VERSION,
+    build_infill_messages,
+    build_proposer_messages,
+)
 from app.schemas.proposer import ProposerCallDiagnostics
 from app.strategies.base import ProposedEdit
 
@@ -69,7 +74,11 @@ class ProposerHarness:
             count=count,
             avoid=avoid,
         )
-        return self._complete(messages, count=count)
+        return self._complete(
+            messages,
+            count=count,
+            prompt_version=S2_PROPOSER_PROMPT_VERSION,
+        )
 
     def infill(
         self,
@@ -89,9 +98,19 @@ class ProposerHarness:
             count=count,
             avoid=avoid,
         )
-        return self._complete(messages, count=count)
+        return self._complete(
+            messages,
+            count=count,
+            prompt_version=S4_INFILL_PROMPT_VERSION,
+        )
 
-    def _complete(self, messages: list[dict[str, str]], *, count: int) -> list[ProposedEdit]:
+    def _complete(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        count: int,
+        prompt_version: str,
+    ) -> list[ProposedEdit]:
         call_seed = self._seed + self._call_index
         self._call_index += 1
         options = {
@@ -115,6 +134,7 @@ class ProposerHarness:
             if self._on_diagnostics is not None:
                 self._on_diagnostics(
                     ProposerCallDiagnostics(
+                        prompt_version=prompt_version,
                         requested_candidates=count,
                         seed=call_seed,
                         num_predict=self._num_predict,

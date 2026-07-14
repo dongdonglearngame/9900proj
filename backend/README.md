@@ -68,10 +68,10 @@ python -m app.scripts.run_proposer_spike `
   --output .\proposer-spike.json
 ```
 
-Each row reports Ollama `done_reason`, `eval_count`, response tokens, raw, parsed, and
-delivered candidate counts, yield, and latency. S2 defaults to four candidates with
-`S2_PROPOSER_NUM_PREDICT=1024`; the separate S6 settings remain at four compact edits
-with `S6_PROPOSER_NUM_PREDICT=512`.
+Each row reports the proposer prompt version, Ollama `done_reason`, `eval_count`,
+response tokens, raw, parsed, and delivered candidate counts, yield, and latency. S2
+defaults to four candidates with `S2_PROPOSER_NUM_PREDICT=1024`; the separate S6
+settings remain at four compact edits with `S6_PROPOSER_NUM_PREDICT=512`.
 
 ## Loader
 

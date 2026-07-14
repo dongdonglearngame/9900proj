@@ -2,6 +2,7 @@ from app.schemas.common import APIModel
 
 
 class ProposerCallDiagnostics(APIModel):
+    prompt_version: str
     requested_candidates: int
     seed: int
     num_predict: int

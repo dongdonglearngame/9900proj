@@ -1,5 +1,8 @@
 import json
 
+S2_PROPOSER_PROMPT_VERSION = "s2-proposer-v2-event-grounded"
+S4_INFILL_PROMPT_VERSION = "s4-infill-v1"
+
 
 def build_proposer_messages(
     scenario: str,

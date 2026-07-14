@@ -49,6 +49,7 @@ class FakeProposer:
     def __init__(self, rounds: list[list[ProposedEdit]]) -> None:
         self.rounds = rounds
         self.calls = 0
+        self.count_history: list[int] = []
         self.avoid_history: list[list[str] | None] = []
 
     def propose(
@@ -62,7 +63,7 @@ class FakeProposer:
         _ = scenario
         _ = choices
         _ = foil
-        _ = count
+        self.count_history.append(count)
         self.avoid_history.append(avoid)
         index = self.calls
         self.calls += 1
@@ -227,6 +228,27 @@ def test_s2_dedupes_across_rounds_and_passes_avoid_rejects() -> None:
     assert target.calls == [first, second]
 
 
+def test_s2_refills_after_proposer_under_delivers() -> None:
+    first = REGINA_SCENARIO.replace("middle of the night", "early morning")
+    second = REGINA_SCENARIO.replace("middle of the night", "late morning")
+    proposer = FakeProposer([[edit(first)], [edit(second)]])
+    target = FakeTargetModel(flip_token="will not flip")
+
+    result = S2LlmProposeVerifyStrategy(max_rounds=2, candidates_per_round=4).generate(
+        scenario=REGINA_SCENARIO,
+        choices=CHOICES,
+        model=target,
+        foil="C",
+        budget=4,
+        proposer=proposer,
+    )
+
+    assert result.status == "not_found"
+    assert proposer.calls == 2
+    assert proposer.count_history == [4, 3]
+    assert target.calls == [first, second]
+
+
 def test_s2_ranks_minimal_candidate_before_larger_rewrite() -> None:
     larger = REGINA_SCENARIO.replace(
         "middle of the night",
@@ -283,6 +305,9 @@ def test_counterfactual_api_runs_s2_in_mock_mode() -> None:
     assert diagnostics["target_verified_parsed_yield"] == 0.5
     assert diagnostics["calls"][0]["done_reason"] == "stop"
     assert diagnostics["calls"][0]["num_predict"] == 1024
+    assert diagnostics["calls"][0]["prompt_version"] == (
+        "s2-proposer-v2-event-grounded"
+    )
     metrics = job["result"]["metrics"]
     assert metrics["foil_logprob_delta"] == 1.7
     assert metrics["mean_foil_logprob_delta"] == 1.7

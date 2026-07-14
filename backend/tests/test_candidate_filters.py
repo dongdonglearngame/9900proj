@@ -38,6 +38,36 @@ def test_foil_guard_checks_only_the_actual_edit_for_existing_foil_words() -> Non
     assert not is_degenerate_foil_leak(original, modified, "relief")
 
 
+def test_foil_guard_allows_shared_content_words_in_sentence_foils() -> None:
+    cases = [
+        (
+            "He had not decided how to spend the evening.",
+            "He joined his friend's group for dinner.",
+            "His friend invited him to dinner and he felt nervous.",
+        ),
+        (
+            "Sam listened quietly as Lee described the problem.",
+            "Sam offered to help Lee find a counsellor.",
+            "Lee should seek professional help immediately.",
+        ),
+        (
+            "Sam listened quietly as Lee described the problem.",
+            "Sam offered to help Lee find a counsellor.",
+            "Seek professional help.",
+        ),
+        (
+            "The appointment remained on the calendar for Monday.",
+            "The meetings were rescheduled for Tuesday.",
+            "The meeting was cancelled because nobody could attend.",
+        ),
+    ]
+
+    assert all(
+        not is_degenerate_foil_leak(original, modified, foil)
+        for original, modified, foil in cases
+    )
+
+
 def test_foil_guard_does_not_claim_to_detect_semantic_leakage() -> None:
     original = "The alarm was still active."
     modified = "The danger had passed."

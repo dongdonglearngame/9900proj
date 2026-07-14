@@ -36,8 +36,8 @@ Creates an async counterfactual job. Mock mode completes the job through FastAPI
 
 Returns `pending`, `running`, `completed`, or `failed` job state with progress counters and a result payload.
 
-Proposer-backed results include `proposer_diagnostics` with per-call seed, generation
-settings and output metadata,
+Proposer-backed results include `proposer_diagnostics` with per-call prompt version,
+seed, generation settings and output metadata,
 raw/parsed/delivered candidate counts, guard rejection totals, and candidate-yield
 ratios. `raw_requested_yield` may exceed 1 when a model over-generates. Parsed counts
 include every valid JSON item; delivered counts apply the requested-candidate limit,

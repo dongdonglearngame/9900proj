@@ -7,7 +7,7 @@ from typing import Any
 from app.core.config import get_settings
 from app.proposer.clients import OllamaProposerClient, ProposerClient
 from app.proposer.harness import parse_proposed_edits_with_diagnostics
-from app.proposer.prompts import build_proposer_messages
+from app.proposer.prompts import S2_PROPOSER_PROMPT_VERSION, build_proposer_messages
 
 
 def run_spike(
@@ -49,6 +49,7 @@ def run_spike(
                 )
                 rows.append(
                     {
+                        "prompt_version": S2_PROPOSER_PROMPT_VERSION,
                         "count": count,
                         "num_predict": num_predict,
                         "seed": seed + repetition,
@@ -71,6 +72,7 @@ def run_spike(
     return {
         "mode": "s2_full_scenario_rewrite",
         "configuration": {
+            "prompt_version": S2_PROPOSER_PROMPT_VERSION,
             "counts": counts,
             "num_predict_values": num_predict_values,
             "temperature": temperature,
