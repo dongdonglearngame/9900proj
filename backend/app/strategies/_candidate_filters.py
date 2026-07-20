@@ -1,5 +1,6 @@
 import re
 from difflib import SequenceMatcher
+from typing import Literal
 
 from app.metrics.diff import word_diff
 from app.metrics.edit_distance import changed_word_fraction, token_edit_distance
@@ -56,6 +57,49 @@ S2_ANCHOR_STOPWORDS = MORPH_STOPWORDS | {
     "you",
     "your",
 }
+S2SemanticRisk = Literal[
+    "downstream_reference",
+    "evaluative_cue",
+    "evaluative_cue_only",
+    "near_synonym_only",
+]
+S2_EVALUATIVE_CUES = {
+    "amazing",
+    "awful",
+    "bad",
+    "best",
+    "better",
+    "excellent",
+    "excited",
+    "exciting",
+    "fantastic",
+    "fortunate",
+    "fortunately",
+    "good",
+    "great",
+    "happy",
+    "lucky",
+    "nice",
+    "proud",
+    "relieved",
+    "sad",
+    "surprising",
+    "surprisingly",
+    "terrible",
+    "thrilled",
+    "unexpected",
+    "unexpectedly",
+    "unique",
+    "wonderful",
+    "worse",
+    "worst",
+}
+S2_NEAR_SYNONYM_FAMILIES = (
+    frozenset({"frown", "frowned", "frowning", "scowl", "scowled", "scowling"}),
+    frozenset({"smile", "smiled", "smiling", "grin", "grinned", "grinning"}),
+    frozenset({"cry", "cried", "crying", "sob", "sobbed", "sobbing"}),
+    frozenset({"laugh", "laughed", "laughing", "chuckle", "chuckled", "chuckling"}),
+)
 
 EMOTION_DERIVATION_FAMILIES = (
     frozenset({"admiration", "admirable", "admiring"}),
@@ -201,18 +245,106 @@ def s2_edit_constraint_violation(
     return None
 
 
+def s2_semantic_risks(original: str, modified: str) -> tuple[S2SemanticRisk, ...]:
+    """Return conservative surface risks for ranking and strategy-level policy.
+
+    These checks intentionally cover only observable surface patterns. They make
+    known fragile edits diagnosable without pretending to solve semantic consistency.
+    """
+
+    spans = word_diff(original, modified)
+    introduced = [
+        word.casefold()
+        for span in spans
+        if span.type in {"insert", "replace"}
+        for word in WORD_RE.findall(span.modified)
+    ]
+    removed = [
+        word.casefold()
+        for span in spans
+        if span.type in {"delete", "replace"}
+        for word in WORD_RE.findall(span.original)
+    ]
+    risks: list[S2SemanticRisk] = []
+
+    if introduced:
+        cue_words = [word for word in introduced if _is_evaluative_cue(word)]
+        if cue_words and len(cue_words) == len(introduced):
+            risks.append("evaluative_cue_only")
+        elif cue_words:
+            risks.append("evaluative_cue")
+
+    if _is_near_synonym_only(removed, introduced):
+        risks.append("near_synonym_only")
+    if _has_downstream_reference_risk(original, modified):
+        risks.append("downstream_reference")
+    return tuple(risks)
+
+
 def _changed_sentence_pair(original: str, modified: str) -> tuple[str, str] | None:
+    details = _changed_sentence_details(original, modified)
+    if details is None:
+        return None
+    _, left, right = details
+    return left, right
+
+
+def _changed_sentence_details(
+    original: str,
+    modified: str,
+) -> tuple[int, str, str] | None:
     original_sentences = _sentences(original)
     modified_sentences = _sentences(modified)
     if not original_sentences or len(original_sentences) != len(modified_sentences):
         return None
 
     changed_pairs = [
-        (left, right)
-        for left, right in zip(original_sentences, modified_sentences, strict=True)
+        (index, left, right)
+        for index, (left, right) in enumerate(
+            zip(original_sentences, modified_sentences, strict=True)
+        )
         if normalise_key(left) != normalise_key(right)
     ]
     return changed_pairs[0] if len(changed_pairs) == 1 else None
+
+
+def _is_evaluative_cue(word: str) -> bool:
+    return word in S2_EVALUATIVE_CUES
+
+
+def _is_near_synonym_only(removed: list[str], introduced: list[str]) -> bool:
+    if len(removed) != 1 or len(introduced) != 1:
+        return False
+    return any(
+        removed[0] in family and introduced[0] in family
+        for family in S2_NEAR_SYNONYM_FAMILIES
+    )
+
+
+def _has_downstream_reference_risk(original: str, modified: str) -> bool:
+    details = _changed_sentence_details(original, modified)
+    if details is None:
+        return False
+    changed_index, original_sentence, modified_sentence = details
+    original_sentences = _sentences(original)
+    if changed_index >= len(original_sentences) - 1:
+        return False
+
+    removed_words = {
+        word.casefold()
+        for span in word_diff(original_sentence, modified_sentence)
+        if span.type in {"delete", "replace"}
+        for word in WORD_RE.findall(span.original)
+        if len(word) >= 4 and word.casefold() not in S2_ANCHOR_STOPWORDS
+    }
+    if not removed_words:
+        return False
+    downstream_words = {
+        word.casefold()
+        for sentence in original_sentences[changed_index + 1 :]
+        for word in WORD_RE.findall(sentence)
+    }
+    return bool(removed_words & downstream_words)
 
 
 def _shares_sentence_anchor(original_sentence: str, modified_sentence: str) -> bool:

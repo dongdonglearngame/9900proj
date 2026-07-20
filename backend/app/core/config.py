@@ -24,6 +24,13 @@ class Settings(BaseSettings):
     s2_proposer_num_predict: int = 1024
     s2_proposer_candidates_per_round: int = 4
     s2_proposer_max_rounds: int = 2
+    s2_prompt_variant: Literal[
+        "v5_baseline",
+        "zero_shot",
+        "one_shot",
+        "few_shot",
+        "span_grounded",
+    ] = "v5_baseline"
     s6_proposer_num_predict: int = 512
     s6_proposer_candidates_per_round: int = 4
     s6_proposer_max_rounds: int = 2

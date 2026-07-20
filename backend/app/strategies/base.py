@@ -27,6 +27,8 @@ class ProposedEdit:
     rationale: str | None = None
     changed_span: str | None = None
     change_type: str | None = None
+    original_span: str | None = None
+    replacement_span: str | None = None
 
 
 @dataclass(frozen=True)

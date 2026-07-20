@@ -54,6 +54,7 @@ class CounterfactualRunContext:
         self._unique_valid_candidates = 0
         self._target_verified_candidates = 0
         self._guard_rejections: dict[str, int] = {}
+        self._semantic_risks: dict[str, int] = {}
         self._update_hook: Callable[CounterfactualRunContext, None] | None = None
 
     def set_update_hook(self, update_hook: Callable[CounterfactualRunContext, None]) -> None:
@@ -95,6 +96,9 @@ class CounterfactualRunContext:
         else:
             self._guard_rejections[outcome] = self._guard_rejections.get(outcome, 0) + 1
 
+    def record_semantic_risk(self, risk: str) -> None:
+        self._semantic_risks[risk] = self._semantic_risks.get(risk, 0) + 1
+
     def proposer_diagnostics(self) -> ProposerDiagnostics | None:
         if not self._proposer_call_diagnostics and not self._guard_rejections:
             return None
@@ -114,6 +118,7 @@ class CounterfactualRunContext:
             unique_valid_candidates=self._unique_valid_candidates,
             target_verified_candidates=self._target_verified_candidates,
             guard_rejections=dict(sorted(self._guard_rejections.items())),
+            semantic_risks=dict(sorted(self._semantic_risks.items())),
             raw_requested_yield=_ratio(raw, requested),
             parsed_raw_yield=_ratio(parsed, raw),
             unique_valid_requested_yield=_ratio(
@@ -307,9 +312,11 @@ class CounterfactualService:
             temperature=settings.proposer_temperature,
             seed=settings.proposer_seed,
             num_predict=_proposer_num_predict(request.strategy_id),
+            s2_prompt_variant=settings.s2_prompt_variant,
             on_call=context.record_proposer_call,
             on_diagnostics=context.record_proposer_diagnostics,
             on_candidate_outcome=context.record_candidate_outcome,
+            on_semantic_risk=context.record_semantic_risk,
         )
 
     def _build_payload(

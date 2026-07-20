@@ -50,6 +50,9 @@ raw/parsed/delivered candidate counts, guard rejection totals, and candidate-yie
 ratios. `raw_requested_yield` may exceed 1 when a model over-generates. Parsed counts
 include every valid JSON item; delivered counts apply the requested-candidate limit,
 so both target-verified/parsed and target-verified/delivered yields remain explicit.
+S2 diagnostics keep non-blocking `semantic_risks` separate from `guard_rejections`.
+Per-call `invalid_span_candidates` records exact-span grounding failures for the
+experimental span proposer without treating them as target-model attempts.
 
 Result metrics include:
 

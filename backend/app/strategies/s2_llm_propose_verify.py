@@ -4,7 +4,7 @@ from dataclasses import replace
 from app.core.config import get_settings
 from app.metrics.diff import word_diff
 from app.metrics.edit_distance import changed_word_fraction
-from app.proposer.harness import record_candidate_outcome
+from app.proposer.harness import record_candidate_outcome, record_semantic_risk
 from app.proposer.prompts import (
     S2_FALLBACK_MAX_CHANGED_WORDS,
     S2_MAX_CHANGED_WORDS,
@@ -16,6 +16,7 @@ from app.strategies._candidate_filters import (
     is_degenerate_foil_leak,
     normalise_key,
     s2_edit_constraint_violation,
+    s2_semantic_risks,
 )
 from app.strategies.base import (
     AttemptRecord,
@@ -29,6 +30,16 @@ from app.strategies.base import (
 AVOID_WINDOW = 8
 FEEDBACK_TEXT_LIMIT = 240
 WORD_RE = re.compile(r"[A-Za-z0-9']+")
+SEMANTIC_RISK_WEIGHTS = {
+    "evaluative_cue": 1,
+    "downstream_reference": 2,
+    "near_synonym_only": 2,
+    "evaluative_cue_only": 3,
+}
+HARD_SEMANTIC_RISK_OUTCOMES = {
+    "evaluative_cue_only": "semantic_evaluative_cue_only",
+    "near_synonym_only": "semantic_near_synonym_only",
+}
 
 
 class S2LlmProposeVerifyStrategy(CounterfactualStrategy):
@@ -145,6 +156,25 @@ class S2LlmProposeVerifyStrategy(CounterfactualStrategy):
                     recent_feedback.append(_feedback("changed_fraction", modified_scenario))
                     continue
 
+                semantic_risks = s2_semantic_risks(scenario, modified_scenario)
+                for risk in semantic_risks:
+                    record_semantic_risk(proposer, risk)
+                hard_semantic_violation = next(
+                    (
+                        HARD_SEMANTIC_RISK_OUTCOMES[risk]
+                        for risk in semantic_risks
+                        if risk in HARD_SEMANTIC_RISK_OUTCOMES
+                    ),
+                    None,
+                )
+                if hard_semantic_violation is not None:
+                    seen.add(key)
+                    record_candidate_outcome(proposer, hard_semantic_violation)
+                    recent_feedback.append(
+                        _feedback(hard_semantic_violation, modified_scenario)
+                    )
+                    continue
+
                 seen.add(key)
                 record_candidate_outcome(proposer, "unique_valid")
                 normalised_edit = replace(edit, modified_scenario=modified_scenario)
@@ -217,6 +247,7 @@ class S2LlmProposeVerifyStrategy(CounterfactualStrategy):
                 break
 
             modified_scenario = edit.modified_scenario
+            semantic_risks = s2_semantic_risks(scenario, modified_scenario)
             prediction = model.target_predict(modified_scenario, choices)
             record_candidate_outcome(proposer, "target_verified")
             success = prediction.answer == foil
@@ -225,7 +256,7 @@ class S2LlmProposeVerifyStrategy(CounterfactualStrategy):
                     modified_scenario=modified_scenario,
                     prediction=prediction,
                     success=success,
-                    edit_description=_edit_description(edit),
+                    edit_description=_edit_description(edit, semantic_risks),
                 )
             )
 
@@ -267,6 +298,13 @@ def _rank_proposals(
         changed_word_fraction(original, edit.modified_scenario) or 0.0
         for edit in proposals
     ]
+    risk_scores = [
+        sum(
+            SEMANTIC_RISK_WEIGHTS[risk]
+            for risk in s2_semantic_risks(original, edit.modified_scenario)
+        )
+        for edit in proposals
+    ]
     diversity_scores: list[float] = []
     for index, tokens in enumerate(change_tokens):
         distances = [
@@ -279,6 +317,7 @@ def _rank_proposals(
     indexed = list(enumerate(proposals))
     indexed.sort(
         key=lambda item: (
+            risk_scores[item[0]],
             changed_word_counts[item[0]] > preferred_max_changed_words,
             changed_word_counts[item[0]],
             changed_fractions[item[0]],
@@ -311,12 +350,21 @@ def _feedback(reason: str, scenario: str) -> str:
     return f"{reason}: {compact}"
 
 
-def _edit_description(edit: ProposedEdit) -> str | None:
+def _edit_description(
+    edit: ProposedEdit,
+    semantic_risks: tuple[str, ...] = (),
+) -> str | None:
     details: list[str] = []
+    if semantic_risks:
+        details.append(f"semantic_risks={','.join(semantic_risks)}")
     if edit.change_type:
         details.append(f"change_type={edit.change_type}")
     if edit.changed_span:
         details.append(f"changed_span={edit.changed_span}")
+    if edit.original_span is not None and edit.replacement_span is not None:
+        details.append(
+            f"span={edit.original_span!r}->{edit.replacement_span!r}"
+        )
     if edit.rationale:
         details.append(edit.rationale)
     return "; ".join(details) or None
