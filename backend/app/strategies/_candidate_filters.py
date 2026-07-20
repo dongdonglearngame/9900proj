@@ -2,9 +2,12 @@ import re
 from difflib import SequenceMatcher
 
 from app.metrics.diff import word_diff
-from app.metrics.edit_distance import changed_word_fraction
+from app.metrics.edit_distance import changed_word_fraction, token_edit_distance
 
 WORD_RE = re.compile(r"[A-Za-z0-9']+")
+SENTENCE_BOUNDARY_RE = re.compile(
+    r"(?:(?<=[.!?])|(?<=[.!?][\"'\u201d\u2019)\]]))\s+|[\r\n]+"
+)
 MORPH_STOPWORDS = {
     "a",
     "an",
@@ -19,6 +22,39 @@ MORPH_STOPWORDS = {
     "to",
     "up",
     "with",
+}
+S2_ANCHOR_STOPWORDS = MORPH_STOPWORDS | {
+    "after",
+    "before",
+    "he",
+    "her",
+    "hers",
+    "him",
+    "his",
+    "i",
+    "it",
+    "its",
+    "me",
+    "my",
+    "our",
+    "ours",
+    "she",
+    "that",
+    "their",
+    "theirs",
+    "them",
+    "then",
+    "they",
+    "this",
+    "those",
+    "today",
+    "tomorrow",
+    "we",
+    "when",
+    "while",
+    "yesterday",
+    "you",
+    "your",
 }
 
 EMOTION_DERIVATION_FAMILIES = (
@@ -137,6 +173,68 @@ def exceeds_changed_fraction(
 ) -> bool:
     fraction = changed_word_fraction(original, modified)
     return fraction is not None and fraction > max_changed_fraction
+
+
+def changed_word_count(original: str, modified: str) -> int:
+    """Return the same word-level edit count exposed in result metrics."""
+
+    return token_edit_distance(original, modified) or 0
+
+
+def s2_edit_constraint_violation(
+    original: str,
+    modified: str,
+    *,
+    max_changed_words: int,
+    require_single_existing_sentence: bool = True,
+) -> str | None:
+    """Return the first deterministic S2 quality constraint that is violated."""
+
+    if require_single_existing_sentence:
+        changed_pair = _changed_sentence_pair(original, modified)
+        if changed_pair is None:
+            return "sentence_structure"
+        if not _shares_sentence_anchor(*changed_pair):
+            return "sentence_anchor"
+    if changed_word_count(original, modified) > max_changed_words:
+        return "changed_word_limit"
+    return None
+
+
+def _changed_sentence_pair(original: str, modified: str) -> tuple[str, str] | None:
+    original_sentences = _sentences(original)
+    modified_sentences = _sentences(modified)
+    if not original_sentences or len(original_sentences) != len(modified_sentences):
+        return None
+
+    changed_pairs = [
+        (left, right)
+        for left, right in zip(original_sentences, modified_sentences, strict=True)
+        if normalise_key(left) != normalise_key(right)
+    ]
+    return changed_pairs[0] if len(changed_pairs) == 1 else None
+
+
+def _shares_sentence_anchor(original_sentence: str, modified_sentence: str) -> bool:
+    original_words = {
+        word
+        for word in WORD_RE.findall(original_sentence.casefold())
+        if word not in S2_ANCHOR_STOPWORDS
+    }
+    modified_words = {
+        word
+        for word in WORD_RE.findall(modified_sentence.casefold())
+        if word not in S2_ANCHOR_STOPWORDS
+    }
+    return bool(original_words & modified_words)
+
+
+def _sentences(value: str) -> list[str]:
+    return [
+        sentence.strip()
+        for sentence in SENTENCE_BOUNDARY_RE.split(value.strip())
+        if sentence.strip()
+    ]
 
 
 def _word_ngrams(value: str, ngram_size: int) -> set[tuple[str, ...]]:

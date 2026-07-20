@@ -1,6 +1,9 @@
 import json
 
-S2_PROPOSER_PROMPT_VERSION = "s2-proposer-v2-event-grounded"
+S2_PROPOSER_PROMPT_VERSION = "s2-proposer-v5-coherence-checklist"
+S2_PREFERRED_MAX_CHANGED_WORDS = 3
+S2_MAX_CHANGED_WORDS = 6
+S2_FALLBACK_MAX_CHANGED_WORDS = 12
 S4_INFILL_PROMPT_VERSION = "s4-infill-v1"
 
 
@@ -11,6 +14,8 @@ def build_proposer_messages(
     original_answer: str,
     count: int,
     avoid: list[str] | None = None,
+    preferred_max_changed_words: int = S2_PREFERRED_MAX_CHANGED_WORDS,
+    max_changed_words: int = S2_MAX_CHANGED_WORDS,
 ) -> list[dict[str, str]]:
     payload = {
         "scenario": scenario,
@@ -19,6 +24,12 @@ def build_proposer_messages(
         "foil": foil,
         "count": count,
         "avoid": avoid or [],
+        "constraints": {
+            "modify_exactly_one_existing_sentence": True,
+            "allow_new_sentences": False,
+            "preferred_max_changed_words": preferred_max_changed_words,
+            "hard_max_changed_words": max_changed_words,
+        },
     }
     return [
         {
@@ -28,11 +39,37 @@ def build_proposer_messages(
                 "multiple-choice scenarios. You may see the target foil, but the frozen "
                 "target model will not. Change an underlying event, outcome, relationship, "
                 "or observable behaviour rather than directly naming or paraphrasing the "
-                "target emotion or answer. Rewrite only the scenario, keep it fluent and "
-                "realistic, do not mention option letters, and do not copy or morphologically "
-                "derive any option answer text in the scenario. Return exactly the requested "
-                "number of distinct rewrites and use a different change mechanism where "
-                "possible. Treat avoid entries as prior failures and do not repeat them. "
+                "target emotion or answer. Modify exactly one existing sentence and do not "
+                "append, prepend, split, or merge sentences. Prefer changing no more than "
+                f"{preferred_max_changed_words} words and never change more than "
+                f"{max_changed_words} words. Preserve the surrounding facts, actors, tense, "
+                "grammar, and narrative coherence. Rewrite only the scenario, keep it fluent "
+                "and realistic, do not mention option letters, and do not copy or "
+                "morphologically derive any option answer text in the scenario. "
+                "Do not add a sentence or clause whose purpose is to state how a person "
+                "feels; express the change through an observable event, outcome, relationship, "
+                "or behaviour. Do not propose an edit that makes unchanged sentences "
+                "contradict the modified fact. Keep the changed sentence about the same focal "
+                "person or event and preserve at least one meaningful content word from that "
+                "sentence. Never replace a focal person's outcome with a reaction by the "
+                "crowd or another bystander. Before returning each rewrite, silently check "
+                "every unchanged sentence for references to a fact the rewrite removed. "
+                "Quality example: original='Maya submitted her proposal, but her manager "
+                "rejected it without explanation.' good_rewrite='Maya submitted her proposal, "
+                "and her manager approved it without hesitation.' This changes three words "
+                "inside the existing sentence and keeps the story grammatical. Bad example: "
+                "'Maya submitted her proposal, but her manager rejected it without "
+                "explanation. Everything was suddenly fine.' This appends an unsupported "
+                "generic sentence instead of editing the event. Use the examples only as "
+                "quality guidance; never copy them. Another bad example: original='Omar won "
+                "the race. He raised the trophy.' rewrite='Omar reached the final. He raised "
+                "the trophy.' The unchanged trophy sentence relies on the removed win. A bad "
+                "focal-person example is original='Kai lost the match.' rewrite='The crowd "
+                "cheered loudly.' The rewrite drops Kai's outcome and substitutes a bystander "
+                "reaction. "
+                "Return exactly the requested number of distinct rewrites and use a different "
+                "change mechanism where possible. Treat avoid entries as prior failures and "
+                "do not repeat them. "
                 "Return JSON only; modified_scenario is required and changed_span, "
                 "change_type, and rationale are optional: "
                 '{"rewrites":[{"modified_scenario":"...","changed_span":"...",'

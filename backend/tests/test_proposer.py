@@ -151,7 +151,7 @@ def test_proposer_harness_records_output_length_diagnostics() -> None:
 
     assert [edit.modified_scenario for edit in edits] == ["one"]
     assert len(diagnostics) == 1
-    assert diagnostics[0].prompt_version == "s2-proposer-v2-event-grounded"
+    assert diagnostics[0].prompt_version == "s2-proposer-v5-coherence-checklist"
     assert diagnostics[0].requested_candidates == 4
     assert diagnostics[0].seed == 0
     assert diagnostics[0].num_predict == 512
@@ -162,6 +162,22 @@ def test_proposer_harness_records_output_length_diagnostics() -> None:
     assert diagnostics[0].done_reason == "length"
     assert diagnostics[0].eval_count == 512
     assert diagnostics[0].response_tokens == 512
+    assert client.messages is not None
+    system_prompt = client.messages[0]["content"]
+    assert "Modify exactly one existing sentence" in system_prompt
+    assert "never change more than 6 words" in system_prompt
+    assert "Maya submitted her proposal" in system_prompt
+    assert "Everything was suddenly fine" in system_prompt
+    assert "Maya felt relieved" not in system_prompt
+    assert "He raised the trophy" in system_prompt
+    assert "The crowd cheered loudly" in system_prompt
+    payload = json.loads(client.messages[-1]["content"])
+    assert payload["constraints"] == {
+        "allow_new_sentences": False,
+        "hard_max_changed_words": 6,
+        "modify_exactly_one_existing_sentence": True,
+        "preferred_max_changed_words": 3,
+    }
 
 
 def test_proposer_harness_increments_seed_for_bounded_refill() -> None:
