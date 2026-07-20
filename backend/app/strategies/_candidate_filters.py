@@ -2,9 +2,10 @@ import re
 from difflib import SequenceMatcher
 
 from app.metrics.diff import word_diff
-from app.metrics.edit_distance import changed_word_fraction
+from app.metrics.edit_distance import changed_word_fraction, token_edit_distance
 
 WORD_RE = re.compile(r"[A-Za-z0-9']+")
+SENTENCE_BOUNDARY_RE = re.compile(r"(?<=[.!?])\s+|[\r\n]+")
 MORPH_STOPWORDS = {
     "a",
     "an",
@@ -137,6 +138,52 @@ def exceeds_changed_fraction(
 ) -> bool:
     fraction = changed_word_fraction(original, modified)
     return fraction is not None and fraction > max_changed_fraction
+
+
+def changed_word_count(original: str, modified: str) -> int:
+    """Return the same word-level edit count exposed in result metrics."""
+
+    return token_edit_distance(original, modified) or 0
+
+
+def s2_edit_constraint_violation(
+    original: str,
+    modified: str,
+    *,
+    max_changed_words: int,
+    require_single_existing_sentence: bool = True,
+) -> str | None:
+    """Return the first deterministic S2 quality constraint that is violated."""
+
+    if require_single_existing_sentence and not _changes_one_existing_sentence(
+        original,
+        modified,
+    ):
+        return "sentence_structure"
+    if changed_word_count(original, modified) > max_changed_words:
+        return "changed_word_limit"
+    return None
+
+
+def _changes_one_existing_sentence(original: str, modified: str) -> bool:
+    original_sentences = _sentences(original)
+    modified_sentences = _sentences(modified)
+    if not original_sentences or len(original_sentences) != len(modified_sentences):
+        return False
+
+    changed_sentences = sum(
+        normalise_key(left) != normalise_key(right)
+        for left, right in zip(original_sentences, modified_sentences, strict=True)
+    )
+    return changed_sentences == 1
+
+
+def _sentences(value: str) -> list[str]:
+    return [
+        sentence.strip()
+        for sentence in SENTENCE_BOUNDARY_RE.split(value.strip())
+        if sentence.strip()
+    ]
 
 
 def _word_ngrams(value: str, ngram_size: int) -> set[tuple[str, ...]]:

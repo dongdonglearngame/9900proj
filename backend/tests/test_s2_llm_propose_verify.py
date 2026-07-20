@@ -51,6 +51,7 @@ class FakeProposer:
         self.calls = 0
         self.count_history: list[int] = []
         self.avoid_history: list[list[str] | None] = []
+        self.outcomes: list[str] = []
 
     def propose(
         self,
@@ -68,6 +69,9 @@ class FakeProposer:
         index = self.calls
         self.calls += 1
         return self.rounds[index] if index < len(self.rounds) else []
+
+    def record_candidate_outcome(self, outcome: str) -> None:
+        self.outcomes.append(outcome)
 
 
 def edit(scenario: str, rationale: str = "test edit") -> ProposedEdit:
@@ -206,6 +210,89 @@ def test_s2_skips_oversized_rewrites_without_target_call() -> None:
     assert target.calls == []
 
 
+def test_s2_rejects_appended_sentence_before_target_verification() -> None:
+    appended = f"{REGINA_SCENARIO} Her friend felt calmer later."
+    proposer = FakeProposer([[edit(appended)]])
+    target = FakeTargetModel()
+
+    result = S2LlmProposeVerifyStrategy(max_rounds=1).generate(
+        scenario=REGINA_SCENARIO,
+        choices=CHOICES,
+        model=target,
+        foil="C",
+        budget=5,
+        proposer=proposer,
+    )
+
+    assert result.status == "not_found"
+    assert result.attempts == []
+    assert target.calls == []
+    assert proposer.outcomes == ["sentence_structure"]
+
+
+def test_s2_rejects_changes_across_multiple_existing_sentences() -> None:
+    original = "Nora missed the train. Her manager criticised her."
+    modified = "Nora caught the train. Her manager praised her."
+    proposer = FakeProposer([[edit(modified)]])
+    target = FakeTargetModel()
+
+    result = S2LlmProposeVerifyStrategy(max_rounds=1).generate(
+        scenario=original,
+        choices=CHOICES,
+        model=target,
+        foil="C",
+        budget=5,
+        proposer=proposer,
+    )
+
+    assert result.status == "not_found"
+    assert result.attempts == []
+    assert target.calls == []
+    assert proposer.outcomes == ["sentence_structure"]
+
+
+def test_s2_accepts_one_changed_sentence_in_multisentence_scenario() -> None:
+    original = "Nora missed the train. Her manager criticised her."
+    modified = "Nora caught the train. Her manager criticised her."
+    proposer = FakeProposer([[edit(modified)]])
+    target = FakeTargetModel(flip_token="will not flip")
+
+    result = S2LlmProposeVerifyStrategy(max_rounds=1).generate(
+        scenario=original,
+        choices=CHOICES,
+        model=target,
+        foil="C",
+        budget=5,
+        proposer=proposer,
+    )
+
+    assert result.status == "not_found"
+    assert len(result.attempts) == 1
+    assert target.calls == [modified]
+    assert proposer.outcomes == ["unique_valid", "target_verified"]
+
+
+def test_s2_rejects_more_than_six_changed_words() -> None:
+    original = "one two three four five six seven eight."
+    modified = "alpha beta gamma delta epsilon zeta eta eight."
+    proposer = FakeProposer([[edit(modified)]])
+    target = FakeTargetModel()
+
+    result = S2LlmProposeVerifyStrategy(max_rounds=1).generate(
+        scenario=original,
+        choices=CHOICES,
+        model=target,
+        foil="C",
+        budget=5,
+        proposer=proposer,
+    )
+
+    assert result.status == "not_found"
+    assert result.attempts == []
+    assert target.calls == []
+    assert proposer.outcomes == ["changed_word_limit"]
+
+
 def test_s2_dedupes_across_rounds_and_passes_avoid_rejects() -> None:
     first = REGINA_SCENARIO.replace("middle of the night", "early morning")
     duplicate = f"  {first.lower()}  "
@@ -250,16 +337,14 @@ def test_s2_refills_after_proposer_under_delivers() -> None:
 
 
 def test_s2_ranks_minimal_candidate_before_larger_rewrite() -> None:
-    larger = REGINA_SCENARIO.replace(
-        "middle of the night",
-        "early morning after a long and difficult journey",
-    )
-    minimal = REGINA_SCENARIO.replace("middle of the night", "early morning")
+    original = "Ava missed the bus and arrived late at work."
+    larger = "Ava caught the train and arrived early for work."
+    minimal = "Ava caught the bus and arrived late at work."
     proposer = FakeProposer([[edit(larger), edit(minimal)]])
     target = FakeTargetModel(flip_token="will not flip")
 
     result = S2LlmProposeVerifyStrategy(max_rounds=1, candidates_per_round=2).generate(
-        scenario=REGINA_SCENARIO,
+        scenario=original,
         choices=CHOICES,
         model=target,
         foil="C",
@@ -299,14 +384,15 @@ def test_counterfactual_api_runs_s2_in_mock_mode() -> None:
     assert diagnostics["requested_candidates"] == 4
     assert diagnostics["raw_candidates"] == 2
     assert diagnostics["parsed_candidates"] == 2
-    assert diagnostics["unique_valid_candidates"] == 2
+    assert diagnostics["unique_valid_candidates"] == 1
     assert diagnostics["target_verified_candidates"] == 1
+    assert diagnostics["guard_rejections"] == {"sentence_structure": 1}
     assert diagnostics["raw_requested_yield"] == 0.5
     assert diagnostics["target_verified_parsed_yield"] == 0.5
     assert diagnostics["calls"][0]["done_reason"] == "stop"
     assert diagnostics["calls"][0]["num_predict"] == 1024
     assert diagnostics["calls"][0]["prompt_version"] == (
-        "s2-proposer-v2-event-grounded"
+        "s2-proposer-v3-constrained-fewshot"
     )
     metrics = job["result"]["metrics"]
     assert metrics["foil_logprob_delta"] == 1.7

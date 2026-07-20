@@ -30,6 +30,8 @@ CandidateOutcome = Literal[
     "empty_or_duplicate",
     "foil_leak",
     "changed_fraction",
+    "changed_word_limit",
+    "sentence_structure",
     "constraint_violation",
     "invalid_span",
 ]

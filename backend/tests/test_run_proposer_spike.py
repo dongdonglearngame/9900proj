@@ -35,7 +35,7 @@ def test_run_spike_records_each_grid_cell_and_output_metadata() -> None:
     assert len(report["rows"]) == 4
     under_delivered = report["rows"][-1]
     assert under_delivered["count"] == 4
-    assert under_delivered["prompt_version"] == "s2-proposer-v2-event-grounded"
+    assert under_delivered["prompt_version"] == "s2-proposer-v3-constrained-fewshot"
     assert under_delivered["num_predict"] == 1024
     assert under_delivered["raw_candidates"] == 2
     assert under_delivered["parsed_candidates"] == 2
