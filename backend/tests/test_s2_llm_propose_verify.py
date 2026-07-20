@@ -230,6 +230,30 @@ def test_s2_rejects_appended_sentence_before_target_verification() -> None:
     assert proposer.outcomes == ["sentence_structure"]
 
 
+def test_s2_rejects_appended_sentence_after_closing_quote() -> None:
+    original = 'Ava introduced Zach. He said "You look amazing for 100!"'
+    modified = 'Ava introduced Zach. He said "You look amazing!" That made Ava proud.'
+    proposer = FakeProposer([[edit(modified)]])
+    target = FakeTargetModel()
+
+    result = S2LlmProposeVerifyStrategy(
+        max_rounds=1,
+        max_changed_fraction=1.0,
+    ).generate(
+        scenario=original,
+        choices=CHOICES,
+        model=target,
+        foil="C",
+        budget=5,
+        proposer=proposer,
+    )
+
+    assert result.status == "not_found"
+    assert result.attempts == []
+    assert target.calls == []
+    assert proposer.outcomes == ["sentence_structure"]
+
+
 def test_s2_rejects_changes_across_multiple_existing_sentences() -> None:
     original = "Nora missed the train. Her manager criticised her."
     modified = "Nora caught the train. Her manager praised her."
@@ -272,13 +296,101 @@ def test_s2_accepts_one_changed_sentence_in_multisentence_scenario() -> None:
     assert proposer.outcomes == ["unique_valid", "target_verified"]
 
 
-def test_s2_rejects_more_than_six_changed_words() -> None:
-    original = "one two three four five six seven eight."
-    modified = "alpha beta gamma delta epsilon zeta eta eight."
+def test_s2_rejects_replacing_focal_outcome_with_bystander_reaction() -> None:
+    original = "Ricky lost the match."
+    modified = "The crowd cheered loudly."
     proposer = FakeProposer([[edit(modified)]])
     target = FakeTargetModel()
 
-    result = S2LlmProposeVerifyStrategy(max_rounds=1).generate(
+    result = S2LlmProposeVerifyStrategy(
+        max_rounds=1,
+        max_changed_fraction=1.0,
+    ).generate(
+        scenario=original,
+        choices=CHOICES,
+        model=target,
+        foil="C",
+        budget=5,
+        proposer=proposer,
+    )
+
+    assert result.status == "not_found"
+    assert result.attempts == []
+    assert target.calls == []
+    assert proposer.outcomes == ["sentence_anchor"]
+
+
+def test_s2_defers_seven_to_twelve_changed_words_until_primary_candidates_fail() -> None:
+    original = "one two three four five six seven eight."
+    fallback = "alpha beta gamma delta epsilon zeta eta eight."
+    primary = "one two three four five six seven nine."
+    proposer = FakeProposer([[edit(fallback), edit(primary)]])
+    target = FakeTargetModel(flip_token="alpha")
+
+    result = S2LlmProposeVerifyStrategy(
+        max_rounds=1,
+        max_changed_fraction=1.0,
+    ).generate(
+        scenario=original,
+        choices=CHOICES,
+        model=target,
+        foil="C",
+        budget=5,
+        proposer=proposer,
+    )
+
+    assert result.status == "success"
+    assert result.modified_scenario == fallback
+    assert target.calls == [primary, fallback]
+    assert proposer.outcomes == [
+        "unique_valid",
+        "unique_valid",
+        "target_verified",
+        "target_verified",
+    ]
+
+
+def test_s2_does_not_verify_deferred_candidate_after_primary_success() -> None:
+    original = "one two three four five six seven eight."
+    fallback = "alpha beta gamma delta epsilon zeta eta eight."
+    primary = "one two three four five six seven nine."
+    proposer = FakeProposer([[edit(fallback), edit(primary)]])
+    target = FakeTargetModel(flip_token="nine")
+
+    result = S2LlmProposeVerifyStrategy(
+        max_rounds=1,
+        max_changed_fraction=1.0,
+    ).generate(
+        scenario=original,
+        choices=CHOICES,
+        model=target,
+        foil="C",
+        budget=5,
+        proposer=proposer,
+    )
+
+    assert result.status == "success"
+    assert result.modified_scenario == primary
+    assert target.calls == [primary]
+    assert proposer.outcomes == [
+        "unique_valid",
+        "unique_valid",
+        "target_verified",
+    ]
+
+
+def test_s2_rejects_more_than_twelve_changed_words() -> None:
+    original = "one two three four five six seven eight nine ten eleven twelve thirteen keep."
+    modified = (
+        "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu keep."
+    )
+    proposer = FakeProposer([[edit(modified)]])
+    target = FakeTargetModel()
+
+    result = S2LlmProposeVerifyStrategy(
+        max_rounds=1,
+        max_changed_fraction=1.0,
+    ).generate(
         scenario=original,
         choices=CHOICES,
         model=target,
@@ -392,7 +504,7 @@ def test_counterfactual_api_runs_s2_in_mock_mode() -> None:
     assert diagnostics["calls"][0]["done_reason"] == "stop"
     assert diagnostics["calls"][0]["num_predict"] == 1024
     assert diagnostics["calls"][0]["prompt_version"] == (
-        "s2-proposer-v3-constrained-fewshot"
+        "s2-proposer-v5-coherence-checklist"
     )
     metrics = job["result"]["metrics"]
     assert metrics["foil_logprob_delta"] == 1.7

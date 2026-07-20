@@ -6,6 +6,7 @@ from app.metrics.diff import word_diff
 from app.metrics.edit_distance import changed_word_fraction
 from app.proposer.harness import record_candidate_outcome
 from app.proposer.prompts import (
+    S2_FALLBACK_MAX_CHANGED_WORDS,
     S2_MAX_CHANGED_WORDS,
     S2_PREFERRED_MAX_CHANGED_WORDS,
 )
@@ -44,6 +45,7 @@ class S2LlmProposeVerifyStrategy(CounterfactualStrategy):
         max_changed_fraction: float | None = None,
         preferred_max_changed_words: int = S2_PREFERRED_MAX_CHANGED_WORDS,
         max_changed_words: int = S2_MAX_CHANGED_WORDS,
+        fallback_max_changed_words: int = S2_FALLBACK_MAX_CHANGED_WORDS,
         require_single_existing_sentence: bool = True,
     ) -> None:
         settings = get_settings()
@@ -61,6 +63,10 @@ class S2LlmProposeVerifyStrategy(CounterfactualStrategy):
             else settings.proposer_max_changed_fraction
         )
         self._max_changed_words = max(0, max_changed_words)
+        self._fallback_max_changed_words = max(
+            self._max_changed_words,
+            fallback_max_changed_words,
+        )
         self._preferred_max_changed_words = min(
             max(0, preferred_max_changed_words),
             self._max_changed_words,
@@ -80,6 +86,7 @@ class S2LlmProposeVerifyStrategy(CounterfactualStrategy):
         budget = max(budget, 0)
         seen = {normalise_key(scenario)}
         recent_feedback: list[str] = []
+        deferred_proposals: list[ProposedEdit] = []
         foil_text = choices[foil]
         rounds = 0
 
@@ -115,7 +122,7 @@ class S2LlmProposeVerifyStrategy(CounterfactualStrategy):
                 constraint_violation = s2_edit_constraint_violation(
                     scenario,
                     modified_scenario,
-                    max_changed_words=self._max_changed_words,
+                    max_changed_words=self._fallback_max_changed_words,
                     require_single_existing_sentence=(
                         self._require_single_existing_sentence
                     ),
@@ -140,45 +147,42 @@ class S2LlmProposeVerifyStrategy(CounterfactualStrategy):
 
                 seen.add(key)
                 record_candidate_outcome(proposer, "unique_valid")
-                valid_proposals.append(replace(edit, modified_scenario=modified_scenario))
-
-            for edit in _rank_proposals(
-                scenario,
-                valid_proposals,
-                preferred_max_changed_words=self._preferred_max_changed_words,
-            ):
-                if len(attempts) >= budget:
-                    break
-
-                modified_scenario = edit.modified_scenario
-                prediction = model.target_predict(modified_scenario, choices)
-                record_candidate_outcome(proposer, "target_verified")
-                success = prediction.answer == foil
-                attempts.append(
-                    AttemptRecord(
-                        modified_scenario=modified_scenario,
-                        prediction=prediction,
-                        success=success,
-                        edit_description=_edit_description(edit),
+                normalised_edit = replace(edit, modified_scenario=modified_scenario)
+                if changed_word_count(scenario, modified_scenario) > self._max_changed_words:
+                    deferred_proposals.append(normalised_edit)
+                    recent_feedback.append(
+                        _feedback("deferred_changed_words", modified_scenario)
                     )
-                )
+                else:
+                    valid_proposals.append(normalised_edit)
 
-                if success:
-                    return CounterfactualResult(
-                        status="success",
-                        original_scenario=scenario,
-                        modified_scenario=modified_scenario,
-                        new_answer=prediction.answer,
-                        foil=foil,
-                        strategy_id=self.id,
-                        attempts=attempts,
-                        message=None,
-                    )
+            success = self._verify_proposals(
+                scenario=scenario,
+                choices=choices,
+                model=model,
+                foil=foil,
+                budget=budget,
+                attempts=attempts,
+                recent_feedback=recent_feedback,
+                proposals=valid_proposals,
+                proposer=proposer,
+            )
+            if success is not None:
+                return success
 
-                predicted = prediction.answer or prediction.status
-                recent_feedback.append(
-                    _feedback(f"target_answer={predicted}", modified_scenario)
-                )
+        fallback_success = self._verify_proposals(
+            scenario=scenario,
+            choices=choices,
+            model=model,
+            foil=foil,
+            budget=budget,
+            attempts=attempts,
+            recent_feedback=recent_feedback,
+            proposals=deferred_proposals,
+            proposer=proposer,
+        )
+        if fallback_success is not None:
+            return fallback_success
 
         return CounterfactualResult(
             status="not_found",
@@ -190,6 +194,58 @@ class S2LlmProposeVerifyStrategy(CounterfactualStrategy):
             attempts=attempts,
             message="no S2 proposal flipped the scenario within budget",
         )
+
+    def _verify_proposals(
+        self,
+        *,
+        scenario: str,
+        choices: dict[str, str],
+        model: TargetModel,
+        foil: str,
+        budget: int,
+        attempts: list[AttemptRecord],
+        recent_feedback: list[str],
+        proposals: list[ProposedEdit],
+        proposer: Proposer,
+    ) -> CounterfactualResult | None:
+        for edit in _rank_proposals(
+            scenario,
+            proposals,
+            preferred_max_changed_words=self._preferred_max_changed_words,
+        ):
+            if len(attempts) >= budget:
+                break
+
+            modified_scenario = edit.modified_scenario
+            prediction = model.target_predict(modified_scenario, choices)
+            record_candidate_outcome(proposer, "target_verified")
+            success = prediction.answer == foil
+            attempts.append(
+                AttemptRecord(
+                    modified_scenario=modified_scenario,
+                    prediction=prediction,
+                    success=success,
+                    edit_description=_edit_description(edit),
+                )
+            )
+
+            if success:
+                return CounterfactualResult(
+                    status="success",
+                    original_scenario=scenario,
+                    modified_scenario=modified_scenario,
+                    new_answer=prediction.answer,
+                    foil=foil,
+                    strategy_id=self.id,
+                    attempts=attempts,
+                    message=None,
+                )
+
+            predicted = prediction.answer or prediction.status
+            recent_feedback.append(
+                _feedback(f"target_answer={predicted}", modified_scenario)
+            )
+        return None
 
 
 def _rank_proposals(

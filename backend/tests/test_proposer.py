@@ -151,7 +151,7 @@ def test_proposer_harness_records_output_length_diagnostics() -> None:
 
     assert [edit.modified_scenario for edit in edits] == ["one"]
     assert len(diagnostics) == 1
-    assert diagnostics[0].prompt_version == "s2-proposer-v3-constrained-fewshot"
+    assert diagnostics[0].prompt_version == "s2-proposer-v5-coherence-checklist"
     assert diagnostics[0].requested_candidates == 4
     assert diagnostics[0].seed == 0
     assert diagnostics[0].num_predict == 512
@@ -167,6 +167,10 @@ def test_proposer_harness_records_output_length_diagnostics() -> None:
     assert "Modify exactly one existing sentence" in system_prompt
     assert "never change more than 6 words" in system_prompt
     assert "Maya submitted her proposal" in system_prompt
+    assert "Everything was suddenly fine" in system_prompt
+    assert "Maya felt relieved" not in system_prompt
+    assert "He raised the trophy" in system_prompt
+    assert "The crowd cheered loudly" in system_prompt
     payload = json.loads(client.messages[-1]["content"])
     assert payload["constraints"] == {
         "allow_new_sentences": False,

@@ -5,7 +5,9 @@ from app.metrics.diff import word_diff
 from app.metrics.edit_distance import changed_word_fraction, token_edit_distance
 
 WORD_RE = re.compile(r"[A-Za-z0-9']+")
-SENTENCE_BOUNDARY_RE = re.compile(r"(?<=[.!?])\s+|[\r\n]+")
+SENTENCE_BOUNDARY_RE = re.compile(
+    r"(?:(?<=[.!?])|(?<=[.!?][\"'\u201d\u2019)\]]))\s+|[\r\n]+"
+)
 MORPH_STOPWORDS = {
     "a",
     "an",
@@ -20,6 +22,39 @@ MORPH_STOPWORDS = {
     "to",
     "up",
     "with",
+}
+S2_ANCHOR_STOPWORDS = MORPH_STOPWORDS | {
+    "after",
+    "before",
+    "he",
+    "her",
+    "hers",
+    "him",
+    "his",
+    "i",
+    "it",
+    "its",
+    "me",
+    "my",
+    "our",
+    "ours",
+    "she",
+    "that",
+    "their",
+    "theirs",
+    "them",
+    "then",
+    "they",
+    "this",
+    "those",
+    "today",
+    "tomorrow",
+    "we",
+    "when",
+    "while",
+    "yesterday",
+    "you",
+    "your",
 }
 
 EMOTION_DERIVATION_FAMILIES = (
@@ -155,27 +190,43 @@ def s2_edit_constraint_violation(
 ) -> str | None:
     """Return the first deterministic S2 quality constraint that is violated."""
 
-    if require_single_existing_sentence and not _changes_one_existing_sentence(
-        original,
-        modified,
-    ):
-        return "sentence_structure"
+    if require_single_existing_sentence:
+        changed_pair = _changed_sentence_pair(original, modified)
+        if changed_pair is None:
+            return "sentence_structure"
+        if not _shares_sentence_anchor(*changed_pair):
+            return "sentence_anchor"
     if changed_word_count(original, modified) > max_changed_words:
         return "changed_word_limit"
     return None
 
 
-def _changes_one_existing_sentence(original: str, modified: str) -> bool:
+def _changed_sentence_pair(original: str, modified: str) -> tuple[str, str] | None:
     original_sentences = _sentences(original)
     modified_sentences = _sentences(modified)
     if not original_sentences or len(original_sentences) != len(modified_sentences):
-        return False
+        return None
 
-    changed_sentences = sum(
-        normalise_key(left) != normalise_key(right)
+    changed_pairs = [
+        (left, right)
         for left, right in zip(original_sentences, modified_sentences, strict=True)
-    )
-    return changed_sentences == 1
+        if normalise_key(left) != normalise_key(right)
+    ]
+    return changed_pairs[0] if len(changed_pairs) == 1 else None
+
+
+def _shares_sentence_anchor(original_sentence: str, modified_sentence: str) -> bool:
+    original_words = {
+        word
+        for word in WORD_RE.findall(original_sentence.casefold())
+        if word not in S2_ANCHOR_STOPWORDS
+    }
+    modified_words = {
+        word
+        for word in WORD_RE.findall(modified_sentence.casefold())
+        if word not in S2_ANCHOR_STOPWORDS
+    }
+    return bool(original_words & modified_words)
 
 
 def _sentences(value: str) -> list[str]:

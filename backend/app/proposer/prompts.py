@@ -1,8 +1,9 @@
 import json
 
-S2_PROPOSER_PROMPT_VERSION = "s2-proposer-v3-constrained-fewshot"
+S2_PROPOSER_PROMPT_VERSION = "s2-proposer-v5-coherence-checklist"
 S2_PREFERRED_MAX_CHANGED_WORDS = 3
 S2_MAX_CHANGED_WORDS = 6
+S2_FALLBACK_MAX_CHANGED_WORDS = 12
 S4_INFILL_PROMPT_VERSION = "s4-infill-v1"
 
 
@@ -45,13 +46,27 @@ def build_proposer_messages(
                 "grammar, and narrative coherence. Rewrite only the scenario, keep it fluent "
                 "and realistic, do not mention option letters, and do not copy or "
                 "morphologically derive any option answer text in the scenario. "
+                "Do not add a sentence or clause whose purpose is to state how a person "
+                "feels; express the change through an observable event, outcome, relationship, "
+                "or behaviour. Do not propose an edit that makes unchanged sentences "
+                "contradict the modified fact. Keep the changed sentence about the same focal "
+                "person or event and preserve at least one meaningful content word from that "
+                "sentence. Never replace a focal person's outcome with a reaction by the "
+                "crowd or another bystander. Before returning each rewrite, silently check "
+                "every unchanged sentence for references to a fact the rewrite removed. "
                 "Quality example: original='Maya submitted her proposal, but her manager "
                 "rejected it without explanation.' good_rewrite='Maya submitted her proposal, "
                 "and her manager approved it without hesitation.' This changes three words "
                 "inside the existing sentence and keeps the story grammatical. Bad example: "
                 "'Maya submitted her proposal, but her manager rejected it without "
-                "explanation. Maya felt relieved.' This adds a sentence and directly states "
-                "an emotion. Use the examples only as quality guidance; never copy them. "
+                "explanation. Everything was suddenly fine.' This appends an unsupported "
+                "generic sentence instead of editing the event. Use the examples only as "
+                "quality guidance; never copy them. Another bad example: original='Omar won "
+                "the race. He raised the trophy.' rewrite='Omar reached the final. He raised "
+                "the trophy.' The unchanged trophy sentence relies on the removed win. A bad "
+                "focal-person example is original='Kai lost the match.' rewrite='The crowd "
+                "cheered loudly.' The rewrite drops Kai's outcome and substitutes a bystander "
+                "reaction. "
                 "Return exactly the requested number of distinct rewrites and use a different "
                 "change mechanism where possible. Treat avoid entries as prior failures and "
                 "do not repeat them. "
