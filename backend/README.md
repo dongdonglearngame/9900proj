@@ -73,6 +73,23 @@ response tokens, raw, parsed, and delivered candidate counts, yield, and latency
 defaults to four candidates with `S2_PROPOSER_NUM_PREDICT=1024`; the separate S6
 settings remain at four compact edits with `S6_PROPOSER_NUM_PREDICT=512`.
 
+### S2 prompt experiments
+
+S2 defaults to the reviewed v5 prompt. Reproducible PR2 ablation variants can be
+selected per process without changing the frozen target prompt:
+
+```powershell
+$env:S2_PROMPT_VARIANT="zero_shot" # v5_baseline|zero_shot|one_shot|few_shot|span_grounded
+python -m app.scripts.batch_run_counterfactuals `
+  --task-type EU --model llama3.2:3b `
+  --strategies s2_llm_propose_verify --budget 20
+Remove-Item Env:S2_PROMPT_VARIANT
+```
+
+`span_grounded` is an experimental reproduction path and is not the production
+default. Its PR2 grounding spike did not meet the adoption gate. See
+`docs/evaluation/s2-pr2-semantic-validity-results.md`.
+
 ## Loader
 
 Import EmoBench JSONL into SQLite:

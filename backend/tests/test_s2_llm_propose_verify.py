@@ -52,6 +52,7 @@ class FakeProposer:
         self.count_history: list[int] = []
         self.avoid_history: list[list[str] | None] = []
         self.outcomes: list[str] = []
+        self.semantic_risks: list[str] = []
 
     def propose(
         self,
@@ -73,9 +74,26 @@ class FakeProposer:
     def record_candidate_outcome(self, outcome: str) -> None:
         self.outcomes.append(outcome)
 
+    def record_semantic_risk(self, risk: str) -> None:
+        self.semantic_risks.append(risk)
+
 
 def edit(scenario: str, rationale: str = "test edit") -> ProposedEdit:
     return ProposedEdit(modified_scenario=scenario, rationale=rationale)
+
+
+def span_edit(
+    original: str,
+    modified: str,
+    original_span: str,
+    replacement_span: str,
+) -> ProposedEdit:
+    return ProposedEdit(
+        modified_scenario=modified,
+        rationale="grounded edit",
+        original_span=original_span,
+        replacement_span=replacement_span,
+    )
 
 
 def test_s2_success_path_records_rationale() -> None:
@@ -100,6 +118,36 @@ def test_s2_success_path_records_rationale() -> None:
     assert result.attempts[0].edit_description == "time shift"
     assert proposer.calls == 1
     assert len(target.calls) == 1
+
+
+def test_s2_attempt_description_records_grounded_span() -> None:
+    modified = REGINA_SCENARIO.replace("middle of the night", "early evening")
+    proposer = FakeProposer(
+        [
+            [
+                span_edit(
+                    REGINA_SCENARIO,
+                    modified,
+                    "middle of the night",
+                    "early evening",
+                )
+            ]
+        ]
+    )
+
+    result = S2LlmProposeVerifyStrategy(max_rounds=1).generate(
+        scenario=REGINA_SCENARIO,
+        choices=CHOICES,
+        model=FakeTargetModel(),
+        foil="C",
+        budget=2,
+        proposer=proposer,
+    )
+
+    assert result.status == "success"
+    assert result.attempts[0].edit_description == (
+        "span='middle of the night'->'early evening'; grounded edit"
+    )
 
 
 def test_s2_not_found_when_verified_candidates_do_not_flip() -> None:
@@ -173,7 +221,10 @@ def test_s2_rejects_morphological_foil_leak_before_target_verification() -> None
     proposer = FakeProposer([[edit("Regina felt relieved after hearing the news.")]])
     target = FakeTargetModel()
 
-    result = S2LlmProposeVerifyStrategy(max_rounds=1, candidates_per_round=2).generate(
+    result = S2LlmProposeVerifyStrategy(
+        max_rounds=1,
+        candidates_per_round=2,
+    ).generate(
         scenario="Regina heard the news and considered what it meant.",
         choices=choices,
         model=target,
@@ -330,6 +381,7 @@ def test_s2_defers_seven_to_twelve_changed_words_until_primary_candidates_fail()
     result = S2LlmProposeVerifyStrategy(
         max_rounds=1,
         max_changed_fraction=1.0,
+        fallback_max_changed_words=12,
     ).generate(
         scenario=original,
         choices=CHOICES,
@@ -360,6 +412,7 @@ def test_s2_does_not_verify_deferred_candidate_after_primary_success() -> None:
     result = S2LlmProposeVerifyStrategy(
         max_rounds=1,
         max_changed_fraction=1.0,
+        fallback_max_changed_words=12,
     ).generate(
         scenario=original,
         choices=CHOICES,
@@ -455,7 +508,10 @@ def test_s2_ranks_minimal_candidate_before_larger_rewrite() -> None:
     proposer = FakeProposer([[edit(larger), edit(minimal)]])
     target = FakeTargetModel(flip_token="will not flip")
 
-    result = S2LlmProposeVerifyStrategy(max_rounds=1, candidates_per_round=2).generate(
+    result = S2LlmProposeVerifyStrategy(
+        max_rounds=1,
+        candidates_per_round=2,
+    ).generate(
         scenario=original,
         choices=CHOICES,
         model=target,
@@ -466,6 +522,78 @@ def test_s2_ranks_minimal_candidate_before_larger_rewrite() -> None:
 
     assert result.status == "not_found"
     assert target.calls == [minimal, larger]
+
+
+def test_s2_rejects_evaluative_cue_only_edit_before_target() -> None:
+    original = "Ricky lost the match."
+    cue_only = "Ricky surprisingly lost the match."
+    event_edit = "Ricky won the match."
+    proposer = FakeProposer([[edit(cue_only), edit(event_edit)]])
+    target = FakeTargetModel(flip_token="will not flip")
+
+    result = S2LlmProposeVerifyStrategy(max_rounds=1, candidates_per_round=2).generate(
+        scenario=original,
+        choices=CHOICES,
+        model=target,
+        foil="C",
+        budget=2,
+        proposer=proposer,
+    )
+
+    assert result.status == "not_found"
+    assert target.calls == [event_edit]
+    assert proposer.semantic_risks == ["evaluative_cue_only"]
+    assert proposer.outcomes == [
+        "semantic_evaluative_cue_only",
+        "unique_valid",
+        "target_verified",
+    ]
+
+
+def test_s2_rejects_near_synonym_only_edit_before_target() -> None:
+    original = "Mina was frowning at the result."
+    modified = "Mina was scowling at the result."
+    proposer = FakeProposer([[edit(modified)]])
+    target = FakeTargetModel(flip_token="scowling")
+
+    result = S2LlmProposeVerifyStrategy(max_rounds=1).generate(
+        scenario=original,
+        choices=CHOICES,
+        model=target,
+        foil="C",
+        budget=2,
+        proposer=proposer,
+    )
+
+    assert result.status == "not_found"
+    assert target.calls == []
+    assert proposer.semantic_risks == ["near_synonym_only"]
+    assert proposer.outcomes == ["semantic_near_synonym_only"]
+
+
+def test_s2_ranks_soft_semantic_risk_after_event_edit() -> None:
+    original = "Ricky played the match."
+    risky = "Ricky played a great final match."
+    event_edit = "Ricky won the match."
+    proposer = FakeProposer([[edit(risky), edit(event_edit)]])
+    target = FakeTargetModel(flip_token="will not flip")
+
+    result = S2LlmProposeVerifyStrategy(
+        max_rounds=1,
+        candidates_per_round=2,
+        max_changed_fraction=1.0,
+    ).generate(
+        scenario=original,
+        choices=CHOICES,
+        model=target,
+        foil="C",
+        budget=2,
+        proposer=proposer,
+    )
+
+    assert result.status == "not_found"
+    assert target.calls == [event_edit, risky]
+    assert proposer.semantic_risks == ["evaluative_cue"]
 
 
 def test_counterfactual_api_runs_s2_in_mock_mode() -> None:
@@ -499,9 +627,11 @@ def test_counterfactual_api_runs_s2_in_mock_mode() -> None:
     assert diagnostics["unique_valid_candidates"] == 1
     assert diagnostics["target_verified_candidates"] == 1
     assert diagnostics["guard_rejections"] == {"sentence_structure": 1}
+    assert diagnostics["semantic_risks"] == {}
     assert diagnostics["raw_requested_yield"] == 0.5
     assert diagnostics["target_verified_parsed_yield"] == 0.5
     assert diagnostics["calls"][0]["done_reason"] == "stop"
+    assert diagnostics["calls"][0]["invalid_span_candidates"] == 0
     assert diagnostics["calls"][0]["num_predict"] == 1024
     assert diagnostics["calls"][0]["prompt_version"] == (
         "s2-proposer-v5-coherence-checklist"

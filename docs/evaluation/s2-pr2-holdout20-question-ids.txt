@@ -1,0 +1,22 @@
+# Frozen S2 PR2 holdout selected before execution.
+# Five questions per dimension x historical-original-correctness stratum.
+emobench_q_en_1_cause
+emobench_q_en_10_cause
+emobench_q_en_100_cause
+emobench_q_en_101_cause
+emobench_q_en_102_cause
+emobench_q_en_103_cause
+emobench_q_en_105_cause
+emobench_q_en_106_cause
+emobench_q_en_109_cause
+emobench_q_en_111_cause
+emobench_q_en_107_emotion
+emobench_q_en_113_emotion
+emobench_q_en_12_emotion
+emobench_q_en_123_emotion
+emobench_q_en_13_emotion
+emobench_q_en_1_emotion
+emobench_q_en_10_emotion
+emobench_q_en_100_emotion
+emobench_q_en_101_emotion
+emobench_q_en_102_emotion

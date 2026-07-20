@@ -1,0 +1,23 @@
+# Final S2 PR2 holdout selected mechanically before execution.
+# Five questions per dimension x historical-original-correctness stratum.
+# Excludes the fixed dev-40 and the superseded first holdout-20.
+emobench_q_en_104_cause
+emobench_q_en_107_cause
+emobench_q_en_108_cause
+emobench_q_en_11_cause
+emobench_q_en_110_cause
+emobench_q_en_112_cause
+emobench_q_en_115_cause
+emobench_q_en_120_cause
+emobench_q_en_124_cause
+emobench_q_en_126_cause
+emobench_q_en_132_emotion
+emobench_q_en_134_emotion
+emobench_q_en_14_emotion
+emobench_q_en_140_emotion
+emobench_q_en_143_emotion
+emobench_q_en_103_emotion
+emobench_q_en_104_emotion
+emobench_q_en_105_emotion
+emobench_q_en_106_emotion
+emobench_q_en_108_emotion
