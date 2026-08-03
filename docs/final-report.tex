@@ -193,7 +193,7 @@ separately because the benchmark data is not committed to Git.
 
 \begin{lstlisting}[style=terminal,language=bash]
 # 1. Clone the repository and enter it
-git clone <team-repository-url>
+git clone https://github.com/unsw-cse-comp99-3900/capstone-project-26t2-9900-f09c-almond.git
 cd capstone-project-26t2-9900-f09c-almond
 
 # 2. Start Ollama on the host and pull the frozen local model
@@ -213,9 +213,12 @@ docker compose exec backend python -m app.scripts.load_emobench \
 
 The frontend is then available at \url{http://localhost:5173} and the backend API
 documentation at \url{http://localhost:8000/docs}. \texttt{docker compose down} stops
-the application; the SQLite database lives in a named volume, so stored experiments
-survive restarts. For development without Docker, the README also documents the
-manual path (Python 3.11 virtual environment plus \texttt{npm run dev}).
+the application. The named SQLite volume preserves imported scenarios,
+target-prediction cache entries, experiment-run metadata, and job checkpoints across
+container restarts. Completed counterfactual payloads, metrics, and batch-comparison
+results are currently retained in process memory and must be rerun after a backend
+restart. For development without Docker, the README also documents the manual path
+(Python 3.11 virtual environment plus \texttt{npm run dev}).
 
 \subsection{Environment Variables and Secrets}
 
@@ -250,8 +253,10 @@ following exactly the steps above from a clean checkout: both images built, both
 containers started, the backend health endpoint reported real (non-mock) mode, both
 EmoBench files loaded into SQLite, one real prediction ran through the containerised
 backend against the host Ollama model, and the containers were restarted without
-losing stored results. The tested Docker, Ollama, and model digest values are recorded
-in the repository README.
+losing the SQLite-backed scenarios, target-prediction cache entries, experiment-run
+metadata, or job checkpoints. Completed counterfactual payloads, metrics, and
+batch-comparison results were not treated as restart-persistent. The tested Docker,
+Ollama, and model digest values are recorded in the repository README.
 
 % =============================================================================
 % 2. Architecture
@@ -295,7 +300,7 @@ result.
   \node[quality, below=of strategies] (quality) {Shared Quality Pipeline\\minimality, fluency, risk labels};
   \node[block, below=of quality] (results) {Results and Metrics\\valid, diagnostic, not found, failed};
 
-  \node[source, left=of services] (sqlite) {SQLite\\scenarios, cache, jobs, results};
+  \node[source, left=of services] (sqlite) {SQLite\\scenarios, prediction cache,\\run metadata, job checkpoints};
   \node[source, left=of sqlite] (emobench) {EmoBench\\local dataset};
   \node[block, right=of strategies] (target) {Frozen Target Harness\\foil-blind verification};
   \node[source, right=of target] (ollama) {Local Ollama\\target, proposer, and judge models};
@@ -310,7 +315,6 @@ result.
   \draw[flow] (strategies) -- node[above,font=\scriptsize]{candidate verification} (target);
   \draw[flow] (quality) -| node[near start,below,font=\scriptsize]{re-verification} (target);
   \draw[flow] (target) -- (ollama);
-  \draw[dataflow] (results.west) -| (sqlite.south);
 \end{tikzpicture}%
 }
 \caption{Final architecture. The Strategy Layer contains the word-level Baseline and
@@ -331,7 +335,7 @@ Target Harness.}
   \item The strategy proposes scenario edits in its own way. Only the frozen target
   decides whether a candidate reaches the foil.
   \item A successful candidate then passes through shared minimality, fluency scoring,
-  and risk labelling before metrics are stored and displayed.
+  and risk labelling before metrics are retained in process memory and displayed.
   \item A search that uses up its budget without a flip is stored as
   \texttt{not\_found}. It is not turned into an error, and no explanation is invented.
 \end{enumerate}
