@@ -349,9 +349,24 @@ they search. That is what makes the comparison fair.
 % =============================================================================
 \section{Design Justifications}
 
-We treated the design as a series of decisions driven by experiments and by client and
-tutor feedback, rather than a fixed feature list. Table~\ref{tab:evolution} summarises
-the main changes across the three sprints.
+The system was designed to support a controlled comparison of counterfactual search
+strategies, not to maximise the number of answer flips. That objective forced three
+commitments, which this chapter justifies in turn: every strategy must face the same
+frozen judge (Section~\ref{sec:harness}); the strategy families must embody
+genuinely different search hypotheses rather than variants of one prompt
+(Section~\ref{sec:strategies}); and every published result must pass through the
+same shared quality stages without being promoted to a valid explanation by the
+software alone (Section~\ref{sec:quality}). Section~\ref{sec:terms} first defines
+the outcome levels these commitments protect. For each decision we state the risk it
+controls, the alternative we considered, the evidence behind it, and the limit of
+what it can guarantee. The numeric settings quoted in this chapter (the 0.60
+changed-fraction cap, the 0.75 fluency threshold, the three-flip retention limit,
+and the overbroad-span rule) are operational settings chosen during development, not
+calibrated constants. The design itself was not fixed up front:
+Table~\ref{tab:evolution} summarises how experiments and client and tutor feedback
+moved it from finding any verified flip (Sprint~1), to bounding and instrumenting
+the search (Sprint~2), to separating search coverage from explanation quality
+(Sprint~3).
 
 \begin{table}[htbp]
 \centering
@@ -365,100 +380,257 @@ Sprint 2 & Add the three main strategies, persistence, and fair comparison & Mor
 Sprint 3 & Improve explanation quality and accessibility & Strict per-strategy word limits rejected useful candidates; flip rate alone hid model sensitivities and invalid explanations & Let strategies focus on discovery, then apply shared minimality and fluency, and separate valid explanations from diagnostic findings \\
 \bottomrule
 \end{tabularx}
-\caption{Design evolution from the Sprint 1 MVP to the completed Sprint 3 system.}
+\caption{Design evolution from the Sprint 1 MVP to the implemented Sprint 3 release.}
 \label{tab:evolution}
 \end{table}
 
-\subsection{Terminology in Plain Language}
+\subsection{Design Criteria and Outcome Taxonomy}
 \label{sec:terms}
 
-These terms are used throughout the report.
+The first design decision is about vocabulary: what the system is allowed to call
+success. A user picks a \textbf{foil} --- the alternative answer they want the model
+to give; the strategy may know it, but the target model is never shown it. When an
+edit makes the frozen target's answer equal the foil exactly, we call that a
+\textbf{mechanical flip}. The criterion at the centre of the design is that a
+mechanical flip is \emph{necessary} for a counterfactual explanation but not
+\emph{sufficient}: it says the answer changed, not that the edit is a meaningful
+account of why. Under one undifferentiated ``success'' label, an answer leak would
+be indistinguishable from a genuine event change, and every aggregate number in
+Section~4 would inherit that ambiguity. The automated system therefore assigns each
+run exactly one outcome category (Figure~\ref{fig:taxonomy}):
 
 \begin{itemize}
-  \item \textbf{Foil.} The alternative answer the user wants the model to give. The
-  strategy is allowed to know it; the target model is never shown it.
-  \item \textbf{Mechanical flip.} After an edit, the frozen target model's answer
-  equals the foil exactly. This only says the answer changed, not that the edit is a
-  good explanation.
-  \item \textbf{Minimality.} How small the edit is. We measure it as the word-level
-  edit distance between the original and the edited scenario: the number of single-word
-  insertions, deletions, and replacements needed to turn one into the other. We also
-  record the changed-word fraction, which is that count divided by the scenario length
-  in words. Smaller is better, because a small change is easier for a person to read
-  and reason about.
-  \item \textbf{Fluency.} Whether the edited text still reads as natural English. We
-  score it automatically with a local judge model (Section~\ref{sec:quality}) and treat
-  the score as a proxy, not proof.
-  \item \textbf{Semantic validity.} Whether the edit is a meaningful change to the
-  situation (an event, outcome, relationship, or behaviour) rather than a trick such as
-  copying the answer into the text, swapping a word for a synonym, or contradicting the
-  rest of the story. Our code flags obvious cases, but the final judgement needs human
-  reviewers, who label each flip Good, Acceptable, or Invalid with reason codes.
-  \item \textbf{Diagnostic finding.} A verified flip that our checks classify as a
-  model sensitivity (for example a near-synonym swap or an answer leak). We keep these
-  as evidence about the model, but never publish them as explanations.
+  \item \textbf{Mechanical flip -- review needed.} A publishable primary flip was
+  found: it reaches the foil and survived the deterministic risk checks. Its quality
+  is still unestablished.
+  \item \textbf{Diagnostic finding.} Every verified flip in the run was risk-flagged
+  --- for example a near-synonym swap or an answer leak. These are kept as evidence
+  about the model's sensitivities and never published as explanations.
+  \item \textbf{Not found.} No verified flip within the budget. This is a real
+  research result about model stability, not an error, and no explanation is
+  invented for it.
+  \item \textbf{Failed.} An infrastructure fault, reported separately so it is never
+  confused with a scientific outcome.
+\end{itemize}
+
+Underneath the run category, each individual verified flip is classified
+\emph{primary} or \emph{diagnostic} by the same deterministic checks, so a run whose
+only flips were risk-flagged is reported as a diagnostic finding, not as a success.
+A third level lies outside the software entirely: \textbf{semantic validity},
+whether the edit meaningfully changes the situation --- an event, outcome,
+relationship, or observable behaviour --- rather than exploiting a trick. Reviewers
+label each surviving flip Good, Acceptable, or Invalid with reason codes under the
+external blinded protocol of Section~\ref{sec:review}; the automated pipeline can
+only mark a flip as awaiting that review, never assign the label itself.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  sbox/.style={draw=Navy,rounded corners=1.5mm,fill=PaleBlue,align=center,
+    font=\scriptsize,minimum height=0.72cm,inner sep=3pt},
+  tbox/.style={sbox,fill=PaleGold},
+  gbox/.style={sbox,fill=PaleGrey},
+  wbox/.style={sbox,fill=white},
+  hdr/.style={font=\scriptsize\bfseries,align=center},
+  note/.style={font=\scriptsize\itshape,text=DarkGrey,align=center},
+  arr/.style={-{Latex[length=2mm]},thick,draw=Navy}
+]
+  % column headers
+  \node[hdr] at (0,3.15)    {Search (automated)};
+  \node[hdr] at (5.3,3.15)  {Run outcome (automated,\\one category per run)};
+  \node[hdr] at (11.0,3.15) {Semantic validity (human)};
+
+  % column 1: search
+  \node[sbox,text width=2.9cm] (run)    at (0,2.1)  {one strategy run\\(fixed search budget)};
+  \node[tbox,text width=2.9cm] (verify) at (0,0.7)  {frozen target verifies\\each candidate};
+  \node[sbox,text width=2.9cm] (risk)   at (0,-0.85) {deterministic risk checks\\classify each verified flip\\primary or diagnostic};
+  \draw[arr] (run)--(verify);
+  \draw[arr] (verify)--(risk);
+
+  % column 2: one outcome category per run
+  \node[sbox,text width=4.4cm] (mech) at (5.3,2.1)  {mechanical flip -- review needed\\(publishable primary flip found)};
+  \node[gbox,text width=4.4cm] (diag) at (5.3,0.7)  {diagnostic finding: only risk-flagged\\flips; kept as sensitivity evidence};
+  \node[gbox,text width=4.4cm] (nf)   at (5.3,-0.7) {\texttt{not\_found} within budget:\\recorded as a real result};
+  \node[gbox,text width=4.4cm] (fail) at (5.3,-2.1) {failed: infrastructure error,\\reported separately};
+  \draw[arr] (risk.east)--(mech.west);
+  \draw[arr] (risk.east)--(diag.west);
+  \draw[arr] (risk.east)--(nf.west);
+  \draw[arr] (risk.east)--(fail.west);
+  \node[note,text width=4.6cm] at (5.3,-3.05) {minimality, fluency, and call counts\\are measurements of the selected\\primary flip, not outcome categories};
+
+  % boundary between automated system and external human review
+  \draw[dashed,thick,draw=DarkGrey] (8.35,2.95) -- (8.35,-2.95);
+  \node[note,rotate=90] at (8.6,-1.6) {automated system boundary};
+
+  % column 3: external human review
+  \node[wbox,text width=3.0cm] (review) at (11.0,2.1) {blinded dual review\\+ adjudication};
+  \draw[arr] (mech.east)--(review.west);
+  \node[wbox] (good) at (9.7,0.7) {Good};
+  \node[wbox] (acc)  at (11.05,0.7) {Acceptable};
+  \node[wbox,text width=1.6cm] (inv) at (12.85,0.7) {Invalid\\(reason codes)};
+  \draw[arr] (review.south)--(good.north);
+  \draw[arr] (review.south)--(acc.north);
+  \draw[arr] (review.south)--(inv.north);
+  \node[note,text width=3.8cm] at (11.0,-0.45) {Good or Acceptable: publishable\\as a valid explanation};
+\end{tikzpicture}
+\caption{Outcome taxonomy of the automated system and its boundary. Blue boxes are
+automated processing, the yellow box is the frozen-target verification step, and
+grey boxes are terminal recorded outcomes. Each run receives exactly one outcome
+category (middle column). Everything right of the dashed line is the external
+blinded human review protocol: the Good, Acceptable, and Invalid labels are never
+generated by the software itself.}
+\label{fig:taxonomy}
+\end{figure}
+
+Three further quantities are \emph{measurements} attached to a result; they describe
+a flip, and none of them adjudicates it.
+
+\begin{itemize}
+  \item \textbf{Minimality.} The word-level edit distance between the original and
+  edited scenario (single-word insertions, deletions, and replacements), plus the
+  changed-word fraction (that count divided by scenario length). Smaller is better,
+  because a small change is easier for a person to read and reason about.
+  \item \textbf{Fluency.} Whether the edited text still reads as natural English,
+  scored automatically by a local judge model (Section~\ref{sec:quality}). The
+  score is a proxy, not proof.
   \item \textbf{Budget.} The maximum number of target-model checks one strategy may
   use for one scenario. Search and post-processing each have a capped allowance, and
   all counts are recorded, so no strategy can look cheap by hiding work.
 \end{itemize}
 
-\subsection{Frozen Target Harness}
+A result can score well on every measurement and still be worthless as an
+explanation: a two-word, fluent edit that quietly copies the answer into the text is
+minimal, fluent, and invalid. The boundary is not hypothetical. In the one fully
+reviewed run (Section~\ref{sec:review}), all four published flips were verified,
+fluent, and moderately sized, and human reviewers still judged all four Invalid.
+That result is the empirical justification for keeping the automated categories and
+the human judgement separate.
 
-The project explains a fixed black-box model. Every strategy calls the same target
-prompt, decoding configuration, answer parser, and cache contract. If each strategy
-could change the target prompt, differences between results could come from the prompt
-instead of the edit, and the comparison would be meaningless. The full target prompt is
-in Appendix~\ref{app:prompts}. A flip is exactly
-\texttt{prediction.answer == foil}.
+\subsection{Frozen Target Harness: One Judge for Every Strategy}
+\label{sec:harness}
 
-\subsection{Strategy Families}
+The threat this decision controls is confounding on the judge's side. Strategies are
+compared by how often and how cheaply they flip the target, so if each strategy
+could call the target with its own prompt, decoding settings, or answer parser, an
+observed difference could come from the prompt rather than from the edits, and the
+comparison would measure strategy-plus-prompt bundles instead of search procedures.
+We considered the permissive alternative --- letting each strategy tune its own
+target prompt, which could raise individual flip rates --- and rejected it, because
+the project's question is which \emph{search procedure} finds better
+counterfactuals, not which prompt makes the model easiest to move. The harness
+fixes the following invariants for every call by every strategy:
+
+\begin{itemize}
+  \item the target receives only the scenario and the choices --- never the foil,
+  the ground truth, or any strategy information;
+  \item one pinned target prompt version
+  (\texttt{target-v2-chat-dynamic-choices}, Appendix~\ref{app:prompts}), decoding
+  configuration, answer parser, and cache contract for all strategies;
+  \item one success rule: a flip is exactly \texttt{prediction.answer == foil};
+  \item capped, recorded call budgets for search and post-processing.
+\end{itemize}
+
+The proposer LLM, by contrast, may see the foil. This is a deliberate asymmetry of
+roles: the proposer generates candidates and proves nothing, while the foil-blind
+target check alone decides. The guarantee must also be stated at its true strength:
+freezing the target prompt, decoding, parser, and cache \emph{reduces} target-side
+confounding, so observed differences more directly reflect the search procedures
+under the stated runtime conditions. It does not remove every source of variance ---
+the proposer samples at temperature 0.7 and is not bit-for-bit repeatable --- which
+is why Section~4 reports paired same-job comparisons (Sections~\ref{sec:s1results}
+and~\ref{sec:s3results}) and treats the single-run runtime table
+(Section~\ref{sec:runtime}) as an illustration of cost scale, not a ranking.
+
+\subsection{Strategy Families and Search Trade-offs}
 \label{sec:strategies}
 
-The client asked us to number the strategies clearly, so the report uses Strategy 1--3
-plus the Baseline. Appendix~\ref{app:mapping} maps these names to the identifiers used
-in the code and in stored experiment metadata. Figure~\ref{fig:flows} shows the search
-flow of each strategy.
+A fair arena is pointless if all contestants are alike. The four implemented
+families cover progressively more structured units of change --- a fixed word list,
+a free event-level rewrite, an importance-guided span infill, and a single grounded
+concept intervention --- so the comparison tests different hypotheses about where
+useful counterfactuals can be found, not four variants of one prompt. The client
+asked us to number the strategies clearly, so the report uses Strategy~1--3 plus the
+Baseline; the internal code identifiers differ (the \texttt{s1}, \texttt{s2},
+\texttt{s4}, and \texttt{s6} families respectively), and Appendix~\ref{app:mapping}
+maps every report name to its code identifier and pinned prompt versions.
+Figure~\ref{fig:flows} shows the search flow of each family.
 
-\paragraph{Baseline: word-level greedy search.}
-The Baseline systematically tries small word and phrase substitutions from a fixed
-list and verifies each attempt. It uses no LLM to generate candidates. It is
-transparent and cheap, but it cannot express a larger event change, so it mainly
-serves as a reference point.
+One scope change must be stated first. The proposal planned six strategy families
+(internal identifiers S1--S6). The delivered and evaluated release implements four:
+S1 (the Baseline), S2 (Strategy~1), S4 (Strategy~2), and S6 (Strategy~3), each main
+family in a strict and a discovery variant. The control-code family (S3) and the
+population-based search family (S5) were not implemented, no result in this report
+uses them, and they remain future work (Table~\ref{tab:future}). We judged the
+delivered four sufficient for the design goal, because they already span the
+edit-unit spectrum from single words to whole-event rewrites.
 
-\paragraph{\stratone{}.}
-A local proposer LLM reads the scenario, the choices, and the foil, and proposes
-complete rewritten scenarios that change one event, outcome, relationship, or
-observable behaviour. Deterministic guards reject rewrites that break structure, leak
-the answer, or change too much, and the frozen target verifies the survivors. The
-Sprint 2 version (\emph{strict}) prefers about three and at most six changed words.
-The Sprint 3 \emph{discovery} variant removes the fixed word cap, keeps a
-changed-fraction safety cap of 0.60, retains up to three distinct verified flips, and
-sends the best one to the shared quality pipeline. This follows the zero-shot
-LLM-counterfactual direction of \cite{bhattacharjee2024} while keeping our target
-model and verification frozen.
+\paragraph{Baseline: word-level greedy search (code family \texttt{s1}).}
+Every comparison needs a floor that establishes what purely mechanical local editing
+achieves. The Baseline tries word and phrase substitutions from a fixed list --- no
+LLM generates candidates --- and verifies each attempt. It is transparent, cheap,
+and deterministic, so it shows how much of an LLM strategy's advantage survives
+against the simplest competitor. Its known limit is expressive: it cannot produce a
+coherent event-level change, which is the gap the main strategies exist to close.
 
-\paragraph{\strattwo{}.}
-This strategy first estimates which parts of the text matter. It occludes (masks) one
-span at a time, asks the frozen target how its confidence in the answers changes, and
-ranks spans by importance; missing confidence values fall back to an answer-change
-heuristic and the coverage is reported rather than silently filled with zeros. It then
-asks the proposer LLM to infill the most important spans with new content and verifies
-the results. The idea adapts importance-guided contrastive editing \cite{ross2021} to
-a black-box setting without gradients. The discovery variant splits the fixed budget
-between importance probes and candidate checks, explores several top spans and mask
-widths, and keeps diagnostic candidates separate.
+\paragraph{\stratone{} (code family \texttt{s2}).}
+A fixed substitution list cannot express ``the outcome of the event was
+different''. Here a local proposer LLM reads the scenario, choices, and foil, and
+proposes complete rewrites that change one event, outcome, relationship, or
+observable behaviour; deterministic guards reject rewrites that break structure,
+leak the answer, or change too much, and the frozen target verifies the survivors
+(following the zero-shot direction of \cite{bhattacharjee2024} with our target
+frozen). The expected advantage is a much richer candidate space; the accepted
+trade-off is that the same freedom creates the leak, contradiction, and over-editing
+failure modes --- which is why the guards and the diagnostic route exist. The strict
+variant prefers about three and at most six changed words; the discovery variant
+removes the fixed cap under a 0.60 changed-fraction safety cap, retains up to three
+distinct verified flips, and sends the best one to the shared quality pipeline. Its
+measured behaviour is reported in Section~\ref{sec:s1results}.
 
-\paragraph{\stratthree{}.}
-This strategy changes exactly one situational concept, such as the time, place,
-relationship, urgency, or outcome. The proposer LLM must point to one exact text span
-and give a replacement for that span; our code checks the span occurs exactly once and
-applies the replacement deterministically, so the LLM never rewrites the whole story.
-It is inspired by concept-level counterfactual work \cite{gat2024}. We describe it as
-\emph{causal-inspired}: changing one concept and observing the model is an
-intervention on the text, not proof of real-world causality. The discovery variant
-adds an outcome concept class, allows a coherent multi-word replacement span, and
-demotes overbroad spans (at least 12 tokens and more than half the scenario) to
-diagnostic findings.
+\paragraph{\strattwo{} (code family \texttt{s4}).}
+Strategy~1 still guesses where to edit. This family asks the target itself what
+matters: it occludes one span at a time, ranks spans by how the frozen target's
+confidence shifts, then has the proposer LLM infill the most important spans ---
+adapting importance-guided contrastive editing \cite{ross2021} to a black-box
+setting without gradients. When no usable confidence values are exposed, the ranking
+falls back to an answer-change heuristic and that coverage is reported, not silently
+zero-filled. The expected advantage is that a limited budget concentrates on spans
+the target is demonstrably sensitive to; the structural cost is that probes spend
+target calls before any candidate exists, visible in the runtime table
+(Section~\ref{sec:runtime}). Evidence status: both variants are implemented,
+unit-tested, and completed a real-model smoke run, but their paired comparative
+evaluation was not completed within the term, so the expected advantage remains a
+design hypothesis rather than a measured result (Strategy~2 status, Section~4).
+
+\paragraph{\stratthree{} (code family \texttt{s6}).}
+Even a well-placed span edit tells a person which \emph{text} mattered, not which
+\emph{situational factor} mattered. This family changes exactly one concept ---
+time, place, relationship, urgency, or outcome. The proposer must point to one exact
+text span and a replacement; our code checks the span occurs exactly once and
+applies the edit deterministically, so the LLM never rewrites the whole story
+(inspired by concept-level work \cite{gat2024}). We call it \emph{causal-inspired}
+deliberately: changing one concept and observing the model is an intervention on the
+text, not proof of real-world causality. The expected advantage is a human-legible
+unit of explanation; the trade-off is that concept boundaries are proposed by an LLM
+and can be too broad, so the discovery variant --- which adds an outcome concept
+class and allows a coherent multi-word replacement span --- demotes overbroad spans
+(at least 12 tokens and more than half the scenario) to diagnostic findings. Its
+measured behaviour on a frozen, unenriched set is in Section~\ref{sec:s3results}.
+
+\paragraph{Strict versus discovery: one conflict, resolved once.}
+The variant split records a design conflict and its resolution, not version
+history. Sprint~2 exposed both horns: a broad prompt found many flips with large
+edits, while the strict word cap recovered small edits by rejecting most of the
+coverage (Table~\ref{tab:prelim}). The cap was doing minimisation's job in the wrong
+place --- discarding coherent event-level candidates before the shared minimiser
+could see them. The discovery variants move that responsibility downstream:
+strategies search more broadly under bounded budgets and safety caps, and the shared
+pipeline shrinks, scores, and classifies whatever survives. The paired dev-40 run
+confirmed the intended trade --- substantially broader coverage at a higher raw
+edit-size and call cost, with shared minimality then halving both variants' edits
+(Table~\ref{tab:s1}, discussed in Section~\ref{sec:s1results}). The strict variants
+remain the default and the comparison baseline; keeping both is what makes the
+Sprint~3 change auditable rather than merely asserted.
 
 \begin{figure}[htbp]
 \centering
@@ -503,67 +675,83 @@ diagnostic findings.
 
   % Shared pipeline
   \node[lbl,below=1.15cm of l3.west,anchor=west] (l4) {Shared stages};
-  \node[sbox,right=0.32cm of l4,fill=PaleGrey] (q1) {verified raw flip};
+  \node[sbox,right=0.32cm of l4,fill=PaleGrey] (q1) {selected primary flip};
   \node[sbox,right=0.5cm of q1,fill=PaleGrey] (q2) {minimality:\\greedy restore};
   \node[sbox,right=0.5cm of q2,fill=PaleGrey] (q3) {fluency score;\\one bounded polish};
   \node[sbox,right=0.5cm of q3,fill=PaleGrey] (q4) {risk flags;\\human review};
   \draw[arr] (q1)--(q2); \draw[arr] (q2)--(q3); \draw[arr] (q3)--(q4);
 \end{tikzpicture}
-\caption{Search flow of each strategy. Yellow boxes are frozen target checks, which
-are the only way any strategy can test a candidate. Every verified flip then enters
-the same shared quality stages (bottom row), each of which re-verifies through the
-same frozen target.}
+\caption{Search flow of each strategy family. Yellow boxes are frozen target checks,
+which are the only way any strategy can test a candidate. The selected primary flip
+then enters the same shared quality stages (bottom row), while diagnostic flips are
+retained separately as sensitivity evidence. Each shared stage that changes the
+scenario re-verifies the flip through the same frozen target; stages that only
+score, classify, or record make no further target call.}
 \label{fig:flows}
 \end{figure}
 
-\subsection{Shared Quality Pipeline: How Each Stage Works}
+\subsection{Shared Quality Pipeline and Evidence Boundaries}
 \label{sec:quality}
 
-Our proposal separated searching for a flip from judging its quality, and Sprint 3
-completed that design. The stages run in a fixed order, and every accepted
-transformation is re-verified by the frozen target.
+If each strategy minimised, polished, or scored its own results, a strategy could
+look better simply by grading itself leniently --- the confound of
+Section~\ref{sec:harness}, moved downstream. The pipeline therefore takes the
+selected primary flip of every strategy through the same fixed stages: minimality,
+fluency scoring with one bounded polish, then risk flags, metrics, and external
+human review; diagnostic flips bypass the publishable route and are retained as
+sensitivity evidence. One rule governs re-verification: every stage that changes the
+scenario must re-verify the flip through the frozen target, while stages that only
+score, classify, or record make no further target call.
 
 \paragraph{Minimality (greedy restoration).}
-The minimiser takes the verified edited scenario and tries to shrink the edit. It
-lines up the original and edited text, finds the changed regions, and then repeatedly
-tries to restore original content, first clause by clause, then word by word. After
-each candidate restoration it asks the frozen target again. If the answer is still the
-foil, the restoration is kept; if the flip is lost, the restoration is rolled back.
-It stops when nothing more can be restored or when the post-processing call cap is
-reached. The result is a verified local minimum, not a guaranteed global minimum. We
-record the edit distance before and after, and both texts stay visible, because a
-smaller edit can hide that the original mechanism was weak.
+The minimiser aligns the original and edited text, finds the changed regions, and
+repeatedly tries to restore original content, first clause by clause, then word by
+word, re-checking the frozen target after each restoration: if the answer is still
+the foil the restoration is kept, otherwise it is rolled back. It stops when nothing
+more can be restored or the post-processing call cap is reached. The result is a
+verified local minimum, not a guaranteed global one. The edit distance before and
+after is recorded and both texts stay visible, because a smaller edit can hide that
+the original mechanism was weak.
 
 \paragraph{Fluency (scored proxy).}
 A separate local judge (the same \texttt{llama3.2:3b} model with a fixed rubric
-prompt, temperature 0, prompt version \texttt{fluency-judge-v2-rubric-100}) reads only
-the edited scenario, with no choices and no foil, and returns an integer from 0 to
-100: 90--100 natural, 75--89 minor issue, 40--74 noticeably awkward, 0--39 broken. We
-store the score divided by 100, so the final fluency score is
-$\text{score} = \text{judge integer} / 100 \in [0,1]$, and a result passes when
-$\text{score} \ge 0.75$. If the judge fails or returns invalid output, we store
+prompt at temperature 0, version \texttt{fluency-judge-v2-rubric-100}; the full
+rubric is in Appendix~\ref{app:prompts}) reads only the edited scenario --- no
+choices, no foil --- and returns an integer score stored as
+$\text{judge integer}/100 \in [0,1]$. A fluency assessment is marked as passing when
+the stored score is at least 0.75. This flag describes readability only: it does not
+establish semantic validity, and a low or missing score does not by itself suppress
+an already verified flip. If the judge fails or returns invalid output, we store
 \texttt{not\_measured} with a reason instead of inventing a value. The score is a
-proxy: Section~\ref{sec:qualitative} shows a broken sentence that still passed, so we
-never present a fluency pass as proof of grammar.
+proxy with documented errors in both directions: Section~\ref{sec:qualitative} shows
+one broken sentence the judge correctly caught at 0.62 and another it wrongly passed
+at 0.83, which is one reason human review remains mandatory.
 
 \paragraph{One constrained polish.}
-If the fluency score is low, the pipeline may attempt exactly one polish. The
-constraints are strict: the polish may only delete unnecessary words from the changed
-span, keeping the remaining words in their original order; it must not add, replace,
-reorder, or inflect words, must not increase the edit distance, must not change
-sentence boundaries, and must not introduce option letters, answer wording, or emotion
-labels. The polished text must still score higher than before and must still flip the
-frozen target, otherwise the polish is rolled back and the pre-polish result stands.
+If the fluency score is low, the pipeline may attempt exactly one polish,
+constrained to deleting unnecessary words from the changed span: it must not add,
+replace, reorder, or inflect words, must not increase the edit distance or change
+sentence boundaries, and must not introduce option letters, answer wording, or
+emotion labels. Because the polish changes the scenario, it is re-verified: it must
+score higher than before and still flip the frozen target, otherwise it is rolled
+back and the pre-polish verified result stands.
 
 \paragraph{Risk flags and human review.}
 Deterministic checks flag high-confidence problems: exact or morphological answer
 leakage, option references such as ``answer is C'', near-synonym-only or
 surface-form-only changes, focal-person shifts, multi-concept spans, and overbroad
-concept spans. Flagged flips become diagnostic findings. Everything that survives is
-still only ``mechanical flip, review needed'' until two reviewers independently label
-it Good, Acceptable, or Invalid with reason codes, hidden from each other, with
-disagreements adjudicated. Minimality and fluency cannot rescue an invalid edit: a
-short, grammatical answer leak is still invalid.
+concept spans. Flagged flips become diagnostic findings. Everything that survives
+remains only ``mechanical flip, review needed'' until two reviewers, hidden from
+each other and blind to strategy identity, label it Good, Acceptable, or Invalid
+with reason codes, with disagreements adjudicated. This review is an external
+protocol executed outside the application and recorded in the evaluation documents;
+the interface displays each surviving flip with its review-needed status, but the
+validity labels are assigned only by that protocol. Our own data demonstrates why
+the division of labour is necessary: in the one fully exercised review
+(Section~\ref{sec:review}), the deterministic rules flagged none of the four
+published flips, and the reviewers judged all four Invalid. Minimality and fluency
+cannot rescue an invalid edit: a short, grammatical answer leak is still invalid.
+
 
 % =============================================================================
 % 4. User-driven evaluation
