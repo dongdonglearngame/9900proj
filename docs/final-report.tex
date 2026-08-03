@@ -157,21 +157,21 @@ strategies: \stratone{}, \strattwo{}, and \stratthree{}. All four run against th
 frozen target model through the same verification path, so their results can be
 compared fairly.
 
-We do not treat every answer change as a good explanation. The finished system
-separates a \emph{mechanical flip} (the model changed its answer) from a
-\emph{human-valid explanation} (reviewers agree the edit is a meaningful change), a
-\emph{diagnostic finding} (the model reacted to wording, spelling, or a leaked answer
-cue), and a valid \texttt{not\_found} result (no flip within the budget). This
-distinction became central after our Sprint 2 experiments showed that a higher flip
-rate can also mean larger, contradictory, or unhelpful edits.
+This distinction between a \emph{mechanical flip} (there was a change in the model's
+response), a \emph{human-valid explanation} (there is agreement that the edit is a
+significant change), a \emph{diagnostic signal} (the model's response was affected by
+the wording, spelling, or a hint of the answer that was leaked), and a legitimate
+\texttt{not\_found} outcome (no flip within the budget) is critical since, according
+to our tests in Sprint 2, a high flip rate may also imply larger, contradictory, or
+even irrelevant edits.
 
-In Sprint 3 we added a shared minimality stage and a fluency check, built a
-discovery-focused variant of each main strategy, clarified the result labels in the
-interface, and added accessibility settings. This report explains the final design,
-shows the measured results, includes example outputs of good and bad quality, and
-states clearly which goals were met and which were not. We present every flip as
-evidence of model behaviour under a frozen test setup, not as proof of the model's
-internal reasoning.
+In Sprint 3 we introduced a shared minimality test phase, a fluency test, developed a
+discovery version for each strategy, refined the labels in the user interface, and
+included accessibility options. This report describes the design that we have finally
+come up with, provides the results of our measurement experiments, and presents
+examples of valid, invalid, and diagnostic outcomes. It clearly states what goals we
+have reached and what goals we have missed. Every flip presented is treated as an
+illustration of model behavior in a fixed environment.
 
 % =============================================================================
 % 1. Installation manual
@@ -217,15 +217,16 @@ the application. The named SQLite volume preserves imported scenarios,
 target-prediction cache entries, experiment-run metadata, and job checkpoints across
 container restarts. Completed counterfactual payloads, metrics, and batch-comparison
 results are currently retained in process memory and must be rerun after a backend
-restart. For development without Docker, the README also documents the manual path
-(Python 3.11 virtual environment plus \texttt{npm run dev}).
+restart. The README also includes instructions for developing without Docker using
+Python 3.11 virtualenv and \texttt{npm run dev}.
 
 \subsection{Environment Variables and Secrets}
 
-The project needs no secrets: there are no API keys and no cloud services. All
-configuration is plain environment variables with working defaults, set in
-\texttt{docker-compose.yml} (or copied from \texttt{backend/.env.example} for manual
-runs). Table~\ref{tab:env} lists the variables a user may want to change.
+No API key or cloud services are required to use this project. All configuration is
+easy environment variables with reasonable defaults defined in
+\texttt{docker-compose.yml} (or else you may use \texttt{backend/.env.example} if
+running manually). Table~\ref{tab:env} describes environment variables that can be
+modified.
 
 \begin{table}[htbp]
 \centering
@@ -237,12 +238,12 @@ runs). Table~\ref{tab:env} lists the variables a user may want to change.
 \texttt{USE\_MOCK\_LLM} & Deterministic mock mode or real local Ollama & \texttt{false} for real runs \\
 \texttt{REPO\_BACKEND} & Memory or SQLite persistence & \texttt{sqlite} \\
 \texttt{DATABASE\_URL} & SQLite location & Docker volume path \\
-\texttt{OLLAMA\_BASE\_URL} & Local model endpoint & \texttt{http://host.docker.\allowbreak internal:11434} \\
-\texttt{DEFAULT\_MODEL} & Frozen target model & \texttt{llama3.2:3b}; digest stored in run metadata \\
-\texttt{VITE\_API\_BASE\_URL} & Frontend-to-backend endpoint & \texttt{http://localhost:8000} (build argument) \\
+\texttt{OLLAMA\_BASE\_URL} & Local model endpoint & \texttt{<docker URL placeholder>} \\
+\texttt{DEFAULT\_MODEL} & Frozen target model & \texttt{llama3.2:3b} for the current evaluation setup \\
+\texttt{VITE\_API\_BASE\_URL} & Frontend-to-backend endpoint & \texttt{http://localhost:8000}, configured in \texttt{frontend/.env.example} \\
 \bottomrule
 \end{tabularx}
-\caption{Environment configuration. No secrets are required.}
+\caption{Environment configuration.}
 \label{tab:env}
 \end{table}
 
@@ -263,10 +264,10 @@ Ollama, and model digest values are recorded in the repository README.
 % =============================================================================
 \section{System Architecture Diagram}
 
-Figure~\ref{fig:architecture} shows the completed architecture. There is one frozen
-target path for every strategy, and one shared quality pipeline after strategy search,
-so minimality, fluency, risk labels, and metrics are computed the same way for every
-result.
+Figure~\ref{fig:architecture} presents the architecture developed. Each strategy has
+its own target path that is frozen, and each strategy search has one quality pipeline
+that is shared, meaning minimality, fluency, risk labels, and metrics are computed the
+same for all results.
 
 \begin{figure}[htbp]
 \centering
@@ -334,15 +335,16 @@ Target Harness.}
   Strategy 3, each with a strict or discovery variant where available).
   \item The strategy proposes scenario edits in its own way. Only the frozen target
   decides whether a candidate reaches the foil.
-  \item A successful candidate then passes through shared minimality, fluency scoring,
-  and risk labelling before metrics are retained in process memory and displayed.
-  \item A search that uses up its budget without a flip is stored as
-  \texttt{not\_found}. It is not turned into an error, and no explanation is invented.
+  \item The process of a successful candidate is followed by minimality, fluency
+  scoring, and risk labelling before metric recording and display.
+  \item A search which exhausts its budget without flipping becomes
+  \texttt{not\_found}. It is not converted to an error, and nothing is made up as an
+  explanation for it.
 \end{enumerate}
 
-Because every strategy shares the same target function, prompt version, success rule,
-budgets, and metric definitions, differences between strategies can only come from how
-they search. That is what makes the comparison fair.
+Since all strategies have the same target function, prompt version, success criterion,
+budget, and metric definitions, the only thing that could distinguish different
+strategies is their search methods. That is why it is a fair comparison.
 
 % =============================================================================
 % 3. Design justifications
@@ -374,14 +376,14 @@ the search (Sprint~2), to separating search coverage from explanation quality
 \small
 \begin{tabularx}{\textwidth}{@{}L{1.7cm}Y Y Y@{}}
 \toprule
-\textbf{Stage} & \textbf{Initial focus} & \textbf{Evidence or feedback} & \textbf{Design response} \\
+\textbf{Stage} & \textbf{Goal at the start} & \textbf{Problem observed} & \textbf{Change made} \\
 \midrule
-Sprint 1 & Deliver an end-to-end local MVP and a first mechanical strategy & A model flip is not interpretable unless every check uses the same target function & Freeze the target harness, add a shared strategy interface, and treat \texttt{not\_found} as a valid result \\
-Sprint 2 & Add the three main strategies, persistence, and fair comparison & More candidates increased flips, but some edits were large, contradictory, unnatural, or leaked the answer & Add event grounding, guards, diagnostics, reproducible comparison, and provisional human validity review \\
-Sprint 3 & Improve explanation quality and accessibility & Strict per-strategy word limits rejected useful candidates; flip rate alone hid model sensitivities and invalid explanations & Let strategies focus on discovery, then apply shared minimality and fluency, and separate valid explanations from diagnostic findings \\
+Sprint 1 & Develop the MVP (minimal viable product) end-to-end locally and the first mechanical strategy. & The results from the strategies cannot be compared in a reliable way if the target prompts or success tests are different. The exhaustive search requires a clearly defined result. & Centralize the predictions to the frozen target harness and use one strategy interface. \\
+Sprint 2 & Three core strategies: persistence and fair comparison & More candidates and flips but edits that were big, contradictory, unnatural, or revealed the answer & Event grounding, safeguards, diagnostics, reproducible comparison, provisional human validity assessment \\
+Sprint 3 & Improve the usefulness of the explanations and make the interface easier to use. & Fixed word limits discarded some meaningful edits, while flip rate alone did not distinguish useful changes from model sensitivities. & Allow broader discovery within safety limits, then apply the shared minimality and fluency stages and separate review candidates from diagnostic findings. \\
 \bottomrule
 \end{tabularx}
-\caption{Design evolution from the Sprint 1 MVP to the implemented Sprint 3 release.}
+\caption{How the design evolved from the Sprint 1 baseline to the final Sprint 3 system.}
 \label{tab:evolution}
 \end{table}
 
