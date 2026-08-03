@@ -351,9 +351,24 @@ strategies is their search methods. That is why it is a fair comparison.
 % =============================================================================
 \section{Design Justifications}
 
-We regarded the design as a process of decisions made through experimentation and
-feedback from the client and the tutor, rather than a predefined set of features. The
-following table summarizes the changes that occurred during all three sprints.
+The system was designed to support a controlled comparison of counterfactual search
+strategies, not to maximise the number of answer flips. That objective forced three
+commitments, which this chapter justifies in turn: every strategy must face the same
+frozen judge (Section~\ref{sec:harness}); the strategy families must embody
+genuinely different search hypotheses rather than variants of one prompt
+(Section~\ref{sec:strategies}); and every published result must pass through the
+same shared quality stages without being promoted to a valid explanation by the
+software alone (Section~\ref{sec:quality}). Section~\ref{sec:terms} first defines
+the outcome levels these commitments protect. For each decision we state the risk it
+controls, the alternative we considered, the evidence behind it, and the limit of
+what it can guarantee. The numeric settings quoted in this chapter (the 0.60
+changed-fraction cap, the 0.75 fluency threshold, the three-flip retention limit,
+and the overbroad-span rule) are operational settings chosen during development, not
+calibrated constants. The design itself was not fixed up front:
+Table~\ref{tab:evolution} summarises how experiments and client and tutor feedback
+moved it from finding any verified flip (Sprint~1), to bounding and instrumenting
+the search (Sprint~2), to separating search coverage from explanation quality
+(Sprint~3).
 
 \begin{table}[htbp]
 \centering
