@@ -496,7 +496,7 @@ could arise from either the prompt or the edit. Appendix~\ref{app:prompts} provi
 the full target prompt. We classify an edit as a flip when
 \texttt{prediction.answer == foil}.
 
-We also considered allowing each strategy to tune its own target prompt.Although
+We also considered allowing each strategy to tune its own target prompt. Although
 this alternative approach would help to achieve higher flip rates for each
 individual case, it would be solving a different problem. The experiment
 compares the effectiveness of \emph{search procedures}, not prompts that make the
@@ -511,7 +511,14 @@ of costs.
 \subsection{Strategy Families}
 \label{sec:strategies}
 
-These four applied strategies differ in the way the structure of the modified unit is arranged; it may be a fixed vocabulary set, a free event-level rewrite, importance-driven span completion, and one concept-grounding procedure. Hence, we may use different search hypotheses rather than modifications of the same prompt. On the client's request, the report applies the names Strategies 1--3 and Baseline to refer to these strategies. Appendix~\ref{app:mapping} maps these terms to the corresponding identifiers in the code and in the experiment metadata. Figure~\ref{fig:flows} illustrates the search procedures for all these strategies.
+The four implemented families cover progressively more structured units of change: a
+fixed word list, a free event-level rewrite, an importance-guided span infill, and a
+single grounded concept intervention. The comparison therefore tests different search
+hypotheses rather than variants of one prompt. On the client's request, the report
+applies the names Strategies 1--3 and Baseline to refer to these strategies.
+Appendix~\ref{app:mapping} maps these terms to the corresponding identifiers in the
+code and in the experiment metadata. Figure~\ref{fig:flows} illustrates the search
+procedures for all these strategies.
 
 The actual scope is different from the proposed scope, which included six
 strategy families (identifier S1 to S6). This report covers four strategy families:
@@ -532,18 +539,18 @@ changes made cannot represent an event as a whole.
 Local proposer LLM goes through the scenario, choices and foil and produces full
 rewrites which change one event, outcome, relationship or observable behavior.
 Deterministic guards filter out candidates which violate the structure, give away
-the answer, or exceed the maximum edit size. The frozen target validates all of
+the answer, or exceed the maximum edit size. The frozen target verifies all of
 remaining candidates. In the Sprint 2 version (\emph{strict}), the goal is to change
 around three words, while six changes are allowed. In Sprint 3 \emph{discovery}
 version, the fixed number of changes is removed but the safety fraction of changes
-is set to 0.60. The version retains up to three different validated flips and
+is set to 0.60. The version retains up to three different verified flips and
 sends the best candidate into the quality pipeline. The design builds upon the
 zero-shot LLM counterfactual proposal in \cite{bhattacharjee2024}, keeping the
 target model and verification constant.
 
 \paragraph{\strattwo{}.}
-This approach first determines the importance of each text span by occluding
-one span at a time, querying the frozen target for the change in confidence in
+This approach first determines the importance of each text span by temporarily
+masking (occluding) one span at a time, querying the frozen target for the change in confidence in
 the answer, and ranking spans in order of importance. In case of missing confidence
 values, the strategy runs the answer-change heuristic and returns the coverage that
 it achieves. The LLM proposer then modifies content in the top-ranked spans, and
@@ -553,8 +560,8 @@ approach splits its budget into probes of importance and checks of candidates.
 It probes several top-ranked spans and mask widths, and records diagnostic
 candidates separately. Both approaches have been implemented and unit tested, and both
 of them passed a real model smoke test. Comparative evaluation of the two variants
-has not been performed during the term; the expected benefit from using the former
-approach has remained a design hypothesis (Section~4).
+has not been performed during the term; the expected benefit of this strategy
+has remained a design hypothesis (Section~4).
 
 \paragraph{\stratthree{}.}
 This strategy changes one situational concept, such as time, place, relationship,
@@ -641,15 +648,15 @@ stages that only score, classify, or record make no further target call.}
 \subsection{Shared Quality Pipeline: How Each Stage Works}
 \label{sec:quality}
 
-In the proposal, flipping and evaluation were two different processes. 
-And Sprint 3 is a reflection of this approach. 
-The process steps are done sequentially. 
-The frozen target re-checks all the transformations that have been accepted. 
-Only the selected primary flip goes into the pipeline, but not the diagnostic flip which is kept separately for sensitivity.
-A step that simply scores, categorizes, or records the current text makes no further target call.
+The proposal treated flip discovery and quality assessment as separate tasks, and
+Sprint 3 implements that separation. The stages run in a fixed order, and the frozen
+target re-verifies every accepted transformation. Only the selected primary flip
+enters the pipeline, while diagnostic flips are retained separately as sensitivity
+evidence. A stage that only scores, classifies, or records the current text makes no
+further target call.
 
 \paragraph{Minimality (greedy restoration).}
-The minimiser receives an edited situation that has been validated and tries to minimise
+The minimiser receives an edited situation that has been verified and tries to minimise
 the edit. It aligns both texts, determines the altered parts, and returns the
 original text back through stages, starting with clauses and then going down to words. After each proposed
 restoration, the minimiser queries the frozen target. It keeps the restoration if the
@@ -679,7 +686,7 @@ Section~\ref{sec:qualitative}, which means that fluency pass does not prove gram
 If the fluency score is low, the pipeline allows for one polishing pass.
 This may remove extraneous words in the modified portion without altering the order
 of the remaining words. It cannot add, replace, reorder, inflect, or increase the edit
-distance. It should also maintain sentence breaks and not include option letters,
+distance. It must also maintain sentence breaks and not include option letters,
 answer phrase, and emotion tags. If the score has been improved and the text still flips
 the frozen target, then the polished version is kept; otherwise, it is discarded.
 
