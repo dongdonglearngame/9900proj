@@ -840,7 +840,7 @@ four automated categories:
 \begin{itemize}
   \item \textbf{Mechanical flip -- needs review:} the target was flipped to the foil,
   but quality has not been established yet;
-  \item \textbf{Diagnostic flip:} a verified flip due to lexical, formatting,
+  \item \textbf{Diagnostic finding:} a verified flip due to lexical, formatting,
   focal-shift, evaluative-cue, or answer-leakage sensitivity that is kept for
   diagnostic purposes instead of being a publishable counterfactual;
   \item \textbf{Not found:} no flips were detected within the fixed budget, which is
@@ -850,12 +850,13 @@ four automated categories:
   reporting.
 \end{itemize}
 
-Explanation is deliberately not an automatic application outcome. Human review is
-conducted offline, outside the web application, using the frozen rubric and blinded
-review sheets. Reviewers label a mechanical flip as \emph{Good}, \emph{Acceptable},
-or \emph{Invalid}; only \emph{Good} and \emph{Acceptable} labels are considered
-human-valid for evaluation artifacts. The current API, database schema, and interface
-do not store reviewer identities, adjudication status, or human-valid labels.
+A valid explanation is deliberately not treated as an automatic application outcome.
+Human review is conducted offline, outside the web application, using the frozen
+rubric and blinded review sheets. Reviewers label a mechanical flip as \emph{Good},
+\emph{Acceptable}, or \emph{Invalid}; only \emph{Good} and \emph{Acceptable} labels
+are considered human-valid for evaluation artifacts. The current API, database
+schema, and interface do not store reviewer identities, adjudication status, or
+human-valid labels.
 
 \subsection{Sprint 2 Evidence Used During Design}
 
@@ -917,24 +918,24 @@ Discovery produced six additional review-candidate scenarios (25\% versus 10\%),
 which is what the system was designed to do: broad searching first, followed by
 processing. The cost is also visible: Discovery created larger edits on average
 (9.40 compared with 4.00 words) and made more than twice as many target calls
-(4.55 versus 1.95). Minimality reduced the edits in both versions by almost half.
+(4.55 versus 1.95). Minimality reduced the edits in both versions by more than half.
 
 The candidate funnel describes where proposals go: Discovery requested 320
 candidates, received 194 raw candidates, parsed 193 of them, and delivered 178 after
-applying the requested-count limit. From these, 64 unique valid primary candidates
-and 63 target-verified proposals emerged; 14 of the verified proposals flipped across
-10 different scenarios. Structural rejections included violations of sentence
-structure (94 proposals), and eight proposals exceeded the changed-fraction limit.
-Review of these 10 candidates is still pending; therefore, they remain mechanical
-flips for now.
+applying the requested-count limit. From these, 64 unique candidates that passed the
+deterministic primary filters and 63 target-verified proposals emerged; 14 of the
+verified proposals flipped across 10 different scenarios. Structural rejections
+included violations of sentence structure (94 proposals), and eight proposals
+exceeded the changed-fraction limit. Review of these 10 candidates is still pending;
+therefore, they remain mechanical flips for now.
 
 \subsection{Sprint 3 Results: Strategy 3 Strict vs.\ Discovery}
 \label{sec:s3results}
 
-For Strategy~3, we froze a new test set of 20 questions without considering its
-scenarios or outputs. The test set is disjoint from all previous Strategy~3 work and
-all other reviewed IDs. We disclose that an initial Strategy~1 sweep once examined all
-400 EU questions; therefore, no set can be described as completely untouched. Both
+For Strategy~3, we froze a new evaluation set of 20 questions without considering its
+scenarios or outputs. The evaluation set is disjoint from all previous Strategy~3 work
+and all other reviewed IDs. We disclose that an initial Strategy~1 sweep once examined
+all 400 EU questions; therefore, no set can be described as completely untouched. Both
 variants were run as a pair at commit \texttt{7fcdc82}, with a search limit and
 post-processing cap of 20 calls per variant. Selection hashes, artifact checksums, and
 the complete configuration are recorded in the repository's evaluation documentation.
@@ -966,9 +967,10 @@ found no flips, and Discovery found one flip. The Discovery variant also yielded
 diagnostic candidates (10 focal shifts, 5 downstream references, 4 multi-concept, 1
 evaluative cue, 1 foil leak, and 1 near-synonym). A diagnostic candidate may have
 several risk factors; consequently, these counts overlap. None of the diagnostic
-candidates flipped the target question. They were handled separately from primary
-candidates and verified only with target-call budget remaining after the primary search. On the
-one primary flip, minimality spent 15 post-processing calls, could not
+candidates flipped the target model to the foil answer. They were handled separately
+from primary candidates and verified only with target-call budget remaining after the
+primary search. On the one primary flip, minimality spent 15 post-processing calls,
+could not
 find a smaller verified version that preserved the concept metadata, and correctly
 kept the raw verified edit. The flip itself is discussed in
 Section~\ref{sec:qualitative}; the coordinator's provisional view is that it is
