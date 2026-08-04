@@ -23,6 +23,7 @@
 \usepackage{tikz}
 \usepackage{amssymb}
 \usepackage{amsmath}
+\usepackage{subcaption}
 
 \usetikzlibrary{arrows.meta,positioning,shapes.geometric}
 
@@ -571,38 +572,102 @@ short, grammatical answer leak is still invalid.
 The completed system supports the following workflow:
 
 \begin{enumerate}
-  \item load an EmoBench scenario and view all its answer choices;
-  \item run the frozen local model and view its original answer;
-  \item choose a non-original foil answer;
-  \item run the Baseline, Strategy 1, Strategy 2, or Strategy 3 as an asynchronous
-  job with a chosen budget;
-  \item inspect the original, raw, and final scenarios side by side with red deletion
-  and green insertion highlighting, plus status, call counts, edit metrics, fluency,
-  risk flags, and result labels;
-  \item compare several strategies on one scenario or on a fixed batch under the same
-  model, question set, foil plan, and budget, including the frozen development and
-  holdout ID lists built into the Comparison page;
-  \item adjust language (English or Simplified Chinese), font size (100--150\%),
+  \item Load an EmoBench scenario and see all of its answer options;
+  \item Run the frozen local model and see its original answer;
+  \item Pick a non-original foil answer;
+  \item Run the Baseline, Strategy 1, Strategy 2, or Strategy 3 as an asynchronous job using the selected budget;
+  \item See the original, raw, and final scenarios side-by-side with red deletions, green insertions,
+statuses, call counts, edit numbers, fluency ratings, risk flags, and result labels;
+  \item Compare several strategies on one scenario or a fixed set of scenarios using the same model, question
+set, foil strategy, budget, and development and holdout IDs embedded into the Comparison page;
+  \item Modify language (English or Simplified Chinese), font size (100--150\%),
   light/dark/system theme, reduced motion, and a focus magnifier in Settings.
 \end{enumerate}
 
-We tested this workflow with keyboard-only navigation, browser zoom at 200\%, every
-font scale, both interface languages, both themes, and reduced motion. Colour is
-always paired with a text label. Switching the interface language never translates or
-changes the scenario and choices sent to the model, because that would change the
+This workflow was then tested using just keyboard navigation, 200\% zoom in the
+browser, all font sizes, all languages, all themes, and low-motion. The color will
+always be used with a text label. Changing the language of the interface will not
+translate the scenario and choices sent to the model, as this would change the
 input being evaluated.
 
-\begin{figure}[htbp]
+\begin{figure}[p]
 \centering
-\fbox{\parbox[c][3.2cm][c]{0.88\textwidth}{\centering
-\textbf{INSERT FINAL UI SCREENSHOTS}\\[0.3cm]
-Experiment page: one reviewed result with highlighted edits.\\
-Comparison page: the same scenario, foil, model, and budget across strategies.}}
+
+% Top row: Experiment workflow
+\begin{subfigure}[t]{0.485\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{im4.png}
+    \caption{Experiment setup, benchmark scenario, and original model prediction.}
+    \label{fig:experiment-setup}
+\end{subfigure}
+\hfill
+\begin{subfigure}[t]{0.485\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{im5.png}
+    \caption{Target-answer selection and the recorded counterfactual-search outcome.}
+    \label{fig:experiment-outcome}
+\end{subfigure}
+
+\vspace{0.5em}
+
+% Bottom row: Comparison workflow
+\begin{subfigure}[t]{\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{im3.png}
+    \caption{Selected-scenario comparison with the scenario, foil, model, and search budget fixed across strategies.}
+    \label{fig:comparison-workflow}
+\end{subfigure}
+
 \caption{Experiment and Comparison workflows of the completed system.}
 \label{fig:screens}
 \end{figure}
 
+\clearpage
 \subsection{Evaluation Objectives and Criteria}
+
+Our evaluation had to answer three questions. First, can a user actually carry out
+the full research workflow in the tool. Second, how often does each strategy change
+the frozen model's answer within a fixed search budget. Third, and most importantly,
+are the edits it finds explanations that a person would accept. Sprint 2 already
+showed us that these are different questions: an early prompt version found many
+flips, but its average edit was about 16.7 words (Table~\ref{tab:prelim}), and we
+could not defend edits of that size as targeted explanations. For this reason we did
+not evaluate against a single success score. Instead we used the eight criteria in
+Table~\ref{tab:criteria}. Flip discovery only measures search coverage. Minimality,
+fluency, and semantic validity are the three edit-quality dimensions our client asked
+us to define precisely, and their exact computation is given in
+Section~\ref{sec:quality}. Efficiency, usability, and reproducibility judge the tool
+itself rather than any single edit.
+
+All quantitative measurements follow one rule: within a comparison, everything except
+the strategy is frozen. The same pinned model, the same prompt versions, the same
+questions, the same foil for every question, the same seed, and the same search
+budget are used, and every verified flip then passes through the same quality
+pipeline. If two variants produce different numbers under this rule, the difference
+can only come from how they search. The rule also has a limit that we keep visible:
+the strategies were evaluated on different question sets at different times, so we
+only compare the strict and discovery variants within one set
+(Sections~\ref{sec:s1results} and~\ref{sec:s3results}) and never rank strategies
+against each other across sets.
+
+For each criterion we also fixed in advance what counts as evidence. Flip discovery
+and efficiency are read directly from run records: every run reports exactly one
+outcome category and its search, post-processing, proposer, and total call counts,
+and \texttt{not\_found} is stored as a real result rather than an error. Minimality
+is reported as the raw versus final edit distance, and the final edit is a verified
+local minimum, not a guaranteed global one. Fluency has a fixed pass line of
+$\geq 0.75$ on the automatic score, and runs where the judge fails record
+\texttt{not\_measured} instead of an invented value. Semantic validity is never
+decided automatically; it requires two independent blinded reviewers
+(Section~\ref{sec:review}). Usability and accessibility were checked by operating the
+complete workflow described earlier with keyboard-only navigation, browser zoom, all
+font sizes, themes, and both interface languages. Reproducibility means every
+comparison records its commit, model digest, prompt versions, seed, question IDs,
+foil plan, and budgets, so the same job can be repeated later. We deliberately did
+not set a minimum flip rate as a success bar, because a low flip rate on a stable
+model is itself a finding. What we required instead is that every run ends in an
+honest category, and that no edit is called an explanation before it passes both the
+automatic checks and human review.
 
 \begin{table}[htbp]
 \centering
