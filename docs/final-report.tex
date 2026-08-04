@@ -371,12 +371,12 @@ the three sprints.
 \toprule
 \textbf{Stage} & \textbf{Goal at the start} & \textbf{Problem observed} & \textbf{Change made} \\
 \midrule
-Sprint 1 & Develop the MVP (minimal viable product) end-to-end locally and the first mechanical strategy. & The results from the strategies cannot be compared in a reliable way if the target prompts or success tests are different. The exhaustive search requires a clearly defined result. & Centralize the predictions to the frozen target harness and use one strategy interface. \\
-Sprint 2 & Three core strategies: persistence and fair comparison & More candidates and flips but edits that were big, contradictory, unnatural, or revealed the answer & Event grounding, safeguards, diagnostics, reproducible comparison, provisional human validity assessment \\
-Sprint 3 & Improve the usefulness of the explanations and make the interface easier to use. & Fixed word limits discarded some meaningful edits, while flip rate alone did not distinguish useful changes from model sensitivities. & Allow broader discovery within safety limits, then apply the shared minimality and fluency stages and separate review candidates from diagnostic findings. \\
+Sprint 1 & Develop the MVP (minimal viable product) end-to-end locally and the first mechanical strategy. & The results from the strategies cannot be compared in a reliable way if the target prompts or success tests are different. The exhaustive search requires a clearly defined result. & Route every prediction through the frozen target harness and give all strategies the same interface. \\
+Sprint 2 & Three core strategies: persistence and fair comparison & Testing more candidates produced more flips, but some edits were too large, contradicted the scenario, read unnaturally, or exposed the answer. & We added event grounding, safety checks, diagnostic labels, a reproducible comparison process, and an initial human validity review. \\
+Sprint 3 & Improve the usefulness of the explanations and make the interface easier to use. & Fixed word limits rejected some useful edits, and flip rate alone could not tell meaningful changes from model sensitivity. & Let each strategy search more broadly within the safety limits, then run the shared minimality and fluency checks and keep review candidates separate from diagnostic findings. \\
 \bottomrule
 \end{tabularx}
-\caption{How the design evolved from the Sprint 1 baseline to the final Sprint 3 system.}
+\caption{Design changes from Sprint 1 to Sprint 3.}
 \label{tab:evolution}
 \end{table}
 
@@ -393,41 +393,41 @@ We use the following terms throughout the report.
   when its answer after an edit matches the foil exactly. This result establishes
   that the answer changed. It does not establish that the edit provides a sound
   explanation.
-  \item \textbf{Minimality.} Minimality measures edit size. We use the word-level
-  edit distance between the original and edited scenarios, defined as the number of
-  single-word insertions, deletions, and replacements needed to transform one into
-  the other. We also record the changed-word fraction by dividing this count by the
-  scenario length in words. Smaller edits are easier to read and analyse.
-  \item \textbf{Fluency.} Fluency measures whether the edited text reads as natural
-  English. A local judge model assigns a score (Section~\ref{sec:quality}), which we
-  treat as a proxy rather than proof.
-  \item \textbf{Semantic validity.} We use semantic validity to assess whether an
-  edit meaningfully changes an event, outcome, relationship, or behaviour in the
-  situation. Invalid edits include copying the answer into the text, replacing a
-  word with a synonym, or contradicting the rest of the story. Our code flags clear
-  cases. Human reviewers make the final judgement by labelling each flip Good,
-  Acceptable, or Invalid and assigning reason codes.
-  \item \textbf{Diagnostic finding.} A diagnostic finding is a verified flip that
-  our checks classify as a model sensitivity, such as a near-synonym swap or answer
-  leakage. We retain the finding as evidence about the model but do not publish it
-  as an explanation.
-  \item \textbf{Budget.} The budget sets the maximum number of target-model checks
-  that a strategy may use for one scenario. Search and post-processing have separate
-  capped allowances. We record every check so that the reported costs include all
-  target-model checks.
+  \item \textbf{Minimality.} Minimality refers to the size of the edit. We measure edit
+  size by word-level edit distance: the number of single-word insertions, deletions,
+  and replacements needed to convert one scenario to another. Additionally, we
+  measure the changed-word fraction as a ratio of the above number to the scenario
+  length in words. Smaller edits are easier to analyze and read.
+  \item \textbf{Fluency.} Fluency measures how naturally the edited text reads in
+  English. For this purpose, we utilize a local judge model
+  (Section~\ref{sec:quality}) and take its score as a proxy, not a proof.
+  \item \textbf{Semantic validity.} We define semantic validity as a change to some
+  meaningful aspect of the event, outcome, relation, or behavior in the scenario. The
+  examples of invalid flips include copying of the answer into the text, word
+  replacement with a synonym, and contradiction to the story context. Our code
+  highlights clear examples, and human judges resolve other flips manually through
+  labeling as Good, Acceptable, or Invalid with reason codes provided.
+  \item \textbf{Diagnostic finding.} Diagnostic finding refers to a verified flip
+  which our analysis detects as a sensitivity of the model: near-synonym substitution
+  and leakage of the answer are among examples. We preserve the finding as evidence
+  about the model but do not present it as an explanation.
+  \item \textbf{Budget.} The budget determines the maximum number of checks of the
+  target model that a strategy can make on one scenario. Search and post-processing
+  have their own budget limits. We record every check so that the reported costs
+  include both stages.
 \end{itemize}
 
-These terms form a hierarchy because a mechanical flip is necessary for a
-counterfactual explanation but is insufficient on its own. The automated system
-assigns each run exactly one outcome category: mechanical flip (review needed),
-diagnostic finding, not found, or failed. Section~4 reports every result using these
-categories (Figure~\ref{fig:taxonomy}). The Good, Acceptable, and Invalid labels come
-from the external blinded review protocol in Section~\ref{sec:review}. The pipeline
-can only mark a flip as awaiting review. In the one fully reviewed run, all four
-published flips were verified, fluent, and moderately sized, yet reviewers judged
-every flip Invalid
-(Section~\ref{sec:review}). This result provides empirical grounds for separating
-automated categories from human judgement.
+These labels are hierarchical since a mechanical flip is required for counterfactual
+explanation but is insufficient by itself. The automated classifier places each run
+into precisely one of four categories: mechanical flip (requires review), diagnostic
+observation, not found, and fail. The results of the entire process are reported using
+the four categories in section~4 (Figure~\ref{fig:taxonomy}). The names Good,
+Acceptable and Invalid refer to the external blinded review methodology discussed in
+Section~\ref{sec:review}. The automated pipeline may flag flips as requiring review.
+Even when reviewing one such run fully, all four flips that were published were
+validated, fluent, and moderate size but all were deemed to be Invalid
+(Section~\ref{sec:review}). This fact empirically proves the separation of automatic
+categories from human judgment.
 
 \begin{figure}[htbp]
 \centering
