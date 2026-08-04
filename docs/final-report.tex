@@ -239,7 +239,7 @@ modified.
 \texttt{USE\_MOCK\_LLM} & Deterministic mock mode or real local Ollama & \texttt{false} for real runs \\
 \texttt{REPO\_BACKEND} & Memory or SQLite persistence & \texttt{sqlite} \\
 \texttt{DATABASE\_URL} & SQLite location & Docker volume path \\
-\texttt{OLLAMA\_BASE\_URL} & Local model endpoint & \texttt{<docker URL placeholder>} \\
+\texttt{OLLAMA\_BASE\_URL} & Local model endpoint & \texttt{http://host.docker.internal:11434} \\
 \texttt{DEFAULT\_MODEL} & Frozen target model & \texttt{llama3.2:3b} for the current evaluation setup \\
 \texttt{VITE\_API\_BASE\_URL} & Frontend-to-backend endpoint & \texttt{http://localhost:8000}, configured in \texttt{frontend/.env.example} \\
 \bottomrule
@@ -265,8 +265,7 @@ Ollama, and model digest values are recorded in the repository README.
 % =============================================================================
 \section{System Architecture Diagram}
 
-Figure~\ref{fig:architecture} presents the architecture developed. Each strategy has
-its own target path that is frozen, and each strategy search has one quality pipeline
+Figure~\ref{fig:architecture} presents the architecture developed. Each strategy search has one quality pipeline
 that is shared, meaning minimality, fluency, risk labels, and metrics are computed the
 same for all results.
 
@@ -1261,7 +1260,7 @@ passing & Database schema work, repository implementation, and testing \\
 High & Capture complete provenance & Every exported run captures the commit, model
 digest, Ollama version, prompt versions, seed, question IDs, foil plan, budgets,
 machines, and artifact checksums & Schema and export work plus release manifest tooling \\
-High & Make the release process Hard & The clean machine goes through the described
+High & Harden the release process & The clean machine goes through the described
 setup process and at least one realistic workflow in the frozen commit; each option of
 the container is versioned and tested rather than just described in the report &
 Release engineering, test machine, fixed runtime version, acceptance log \\
