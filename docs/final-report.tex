@@ -1135,56 +1135,89 @@ adjudication outcomes.
 \subsection{Limitations}
 
 \begin{itemize}
-  \item \textbf{Small local model.} The default 3B model runs on CPU laptops but has
-  limited emotional reasoning, instruction following, and editing ability. Observed
-  sensitivities may be specific to this model.
-  \item \textbf{Black-box evidence.} A counterfactual shows the output changed when
-  the input changed. It does not reveal internal reasoning or prove causality, and we
-  label Strategy 3 causal-inspired for exactly this reason.
-  \item \textbf{Mechanical versus valid flips.} Minimality and fluency cannot turn an
-  answer leak, contradiction, or irrelevant cue into a valid explanation. On the one
-  fully reviewed run, all four published flips were judged invalid.
-  \item \textbf{Human review scale.} Two-reviewer validity labels exist for one
-  consumed run; the blinded labels for the newest Strategy 1 and Strategy 3 flips are
-  still pending, so all newer validity statements are provisional.
-  \item \textbf{Automatic quality proxies.} The fluency judge false-passed a broken
-  sentence (0.83) and the risk rules flagged none of the four human-invalid flips, so
-  neither replaces review.
-  \item \textbf{Minimality side effects.} Greedy restoration sometimes removes
-  connective words and produces fragments; raw and final texts are both kept visible
-  to compensate.
-  \item \textbf{Incomplete comparisons.} Strategy 2 has only smoke-level evidence, and
-  a single all-strategy controlled holdout matrix was not run within the term; the
-  per-strategy paired comparisons above use different sets and must not be compared
-  against each other.
-  \item \textbf{Run variability.} The proposer runs at temperature 0.7 and is not
-  bit-for-bit repeatable across local runs even with a fixed seed, so paired
-  same-job comparisons are reported and repeated-run variance remains unmeasured.
-  \item \textbf{Evaluation scope.} EmoBench is a benchmark, not a clinical setting.
-  The tool analyses model behaviour and must not be used to provide mental-health or
-  medical advice.
-  \item \textbf{Language setting.} The interface language switch translates the
-  interface only; translating scenarios would change the input being evaluated.
+  \item \textbf{Model and Evaluation Scope.} The default 3B model is realistic to run
+  on CPU laptops, but it is not very good at emotional reasoning, instructions
+  following, and editing; hence, the sensitivity results could be model specific.
+  EmoBench is a benchmark test suite, not a clinic. It is important not to misuse this
+  tool to get any advice on mental health or medicine.
+  \item \textbf{Black-box evidence.} A counterfactual provides evidence that the output
+  changes in response to the change of the input. However, it does not tell anything
+  about internal mechanics or prove causality. We call Strategy 3 causal-inspired
+  because of this.
+  \item \textbf{Mechanical vs Valid Flips.} Minimization and fluency cannot convert an
+  answer leak, contradiction, irrelevant hint, or model sensitivity into a valid
+  explanation. The fluency judge false-passed a faulty sentence (0.83), the risk rules
+  failed to identify the four human-invalid flips, and greedy restoration may produce
+  fragments; hence, raw, minimal and final texts are visible for inspection.
+  \item \textbf{Human review scale and process.} Labels by two reviewers are available
+  for one consumed run, where all four published flips have been marked as Invalid.
+  Blind labeling for the latest Strategy 1 and Strategy 3 flips is still pending, and
+  review and adjudication are done outside the app rather than stored in its
+  UI/database.
+  \item \textbf{Incomplete comparisons.} There is only smoke-level evidence for
+  Strategy 2, and no all-strategy controlled holdout matrix has been performed during
+  this term; paired comparisons of Strategies above use different sets and cannot be
+  compared against each other.
+  \item \textbf{Run variability.} The proposer performs runs at temperature 0.7 and is
+  not bit-for-bit deterministic during local runs with the same seed, so paired
+  same-job comparisons are provided but repeat-run variance is unknown.
+  \item \textbf{Persistence and Reproducibility.} SQLite maintains scenarios, the
+  target cache, run data, and checkpoints, but fully-fledged counterfactual artifacts,
+  metrics, and comparison results stay process local. Some of the details about the
+  models, prompts, environments, and artifacts are not recorded in the general run
+  record, and thus reproducibility requires the evaluation documentation and the
+  hand-over manifest.
+  \item \textbf{Interface and release validation.} The interface has implemented
+  keyboard accessibility, zoom, themes, font scaling, reduced-motion support, and two
+  interface languages, but there have been no usability studies or independent
+  accessibility audits. The language toggle does not translate the benchmark
+  scenarios, and installation claims, runtime artifacts, and the README file have to
+  be confirmed against the frozen release.
 \end{itemize}
 
 \subsection{Client Handover}
 
-The handover package contains:
+The handover register separates material already present in the project from evidence
+that must be recorded in the final client communication. This distinction prevents a
+scheduled activity or an external file from being described as already delivered.
 
-\begin{itemize}
-  \item the team GitHub repository at the frozen release commit, with CI passing;
-  \item the dockerised installation path in this report and the pinned-version README;
-  \item architecture, strategy-interface, evaluation-protocol, and rubric documents in
-  \texttt{docs/}, including the frozen question-ID lists and artifact checksums that
-  make every reported table reproducible;
-  \item the raw experiment artifacts (JSON exports and SQLite databases) kept outside
-  Git, with their SHA-256 checksums recorded in the tracked documents;
-  \item a live walkthrough of the Experiment, Comparison, and Settings pages showing
-  one valid, one diagnostic, and one not-found outcome;
-  \item this limitations and future-work section, which identifies the experimental
-  components (discovery variants, fluency judge) that are research tools rather than
-  finished features.
-\end{itemize}
+\begin{table}[!htbp]
+\centering
+\footnotesize
+\begin{tabularx}{\textwidth}{@{}L{2.7cm}Y Y@{}}
+\toprule
+\textbf{Handover item} & \textbf{Evidence and location} & \textbf{Status and final action} \\
+\midrule
+Source release & Team repository at
+\url{https://github.com/unsw-cse-comp99-3900/capstone-project-26t2-9900-f09c-almond};
+current audited reference \texttt{93274c1} & Freeze the submission commit and record
+its full hash and the corresponding CI run in the client message; do not infer a
+passing result from the presence of a workflow file \\
+Installation and runtime & Section~1, \path{README.md},
+\path{backend/.env.example}, and \path{docs/real-demo-mode.md} & Confirm that the
+Docker, README, environment, and manual instructions match the frozen release, then
+attach the clean-machine verification record \\
+Technical and evaluation documents & \path{docs/architecture.md},
+\path{docs/strategy-interface.md}, the protocol and rubric files under
+\path{docs/evaluation/}, and frozen question-ID lists & These documents support
+reproduction; update any scaffold-era TODO wording and avoid claiming that the generic
+run record alone reproduces every table \\
+External experiment artifacts & JSON exports, SQLite databases, blinded review
+workbooks, reconciled labels, and the retained timing artifact & Supply one manifest
+containing each file name, purpose, storage location or access method, and SHA-256;
+these files are intentionally not committed to Git \\
+Client walkthrough & Experiment, Comparison, and Settings pages & Demonstrate one
+mechanical flip awaiting review, one diagnostic finding, one \texttt{not\_found}
+outcome, and the visibility of failed runs; call a result valid only when an external
+Good or Acceptable human label exists \\
+Known limitations and ownership & This section and the release notes & Confirm the
+remaining experimental features, persistence boundary, support contact, and ownership
+transfer in the final message \\
+\bottomrule
+\end{tabularx}
+\caption{Client-handover register and evidence still required at release freeze.}
+\label{tab:handover}
+\end{table}
 
 \begin{figure}[htbp]
 \centering
@@ -1203,26 +1236,63 @@ Week 10 demonstration session. If any handover step is still pending at submissi
 time, that step and the reason are stated here, and the final communication
 screenshot will be provided to the tutor as soon as it is sent.
 
+\clearpage
+
 \subsection{Future Work}
 
-\begin{table}[htbp]
+Priorities listed below differentiate between release and evidence gaps as well as
+research direction extensions. Each direction is considered completed only if it
+achieves its success criteria.
+
+\begin{table}[!htbp]
 \centering
-\small
-\begin{tabularx}{\textwidth}{@{}L{3.1cm}Y Y@{}}
+\footnotesize
+\begin{tabularx}{\textwidth}{@{}L{1.05cm}L{2.5cm}Y Y@{}}
 \toprule
-\textbf{Future direction} & \textbf{Why it is useful} & \textbf{Resources required} \\
+\textbf{Priority} & \textbf{Direction} & \textbf{Success criterion} & \textbf{Requirements} \\
 \midrule
-Complete the evaluation programme & Finishes the pending blinded labels, the Strategy 2 paired runs, and one all-strategy holdout matrix & Reviewer time, a new frozen question set, and repeated benchmark runs \\
-Larger or multiple local models & Tests whether observed sensitivities are model-specific & More RAM/GPU time, pinned models, repeated runs \\
-Broader independent annotation & Produces stronger validity and fluency estimates & More reviewers, the existing protocol, adjudication time \\
-Validated semantic and fluency evaluators & Reduces manual triage without hiding uncertainty & Labelled calibration data and possibly a separate local judge model \\
-User study with researchers & Tests whether the labels support real analysis tasks, in the spirit of interpretability tooling \cite{tenney2020} & Ethics review, participants, task design, analysis time \\
-More counterfactual families and tasks & Expands the comparison beyond the current four strategies and EmoBench & New strategy implementations, fair budgets, new datasets \\
+High & Complete the evaluation programme & Complete Strategy 1 and Strategy 3 blinded
+labels, a paired Strategy 2 evaluation, one all-strategy matrix on a newly frozen set,
+and repeated-run variance estimates & Reviewer time, new question set, adjudication,
+and repeated benchmark runs \\
+High & Persist completed results & Counterfactual payloads, metrics, and comparisons
+remain available for queries after a backend restart, with migration and restart test
+passing & Database schema work, repository implementation, and testing \\
+High & Capture complete provenance & Every exported run captures the commit, model
+digest, Ollama version, prompt versions, seed, question IDs, foil plan, budgets,
+machines, and artifact checksums & Schema and export work plus release manifest tooling \\
+High & Make the release process Hard & The clean machine goes through the described
+setup process and at least one realistic workflow in the frozen commit; each option of
+the container is versioned and tested rather than just described in the report &
+Release engineering, test machine, fixed runtime version, acceptance log \\
+Medium & Blinded review & The system gets independent labels, disagreements,
+adjudications, and results (either Good, Acceptable, or Invalid) without giving away the
+identity of the strategy to the reviewers & Data model, permissions, user interface,
+and audit tests \\
+Medium & Expand and calibrate annotations & Independent reviewers annotate a bigger
+sample and a calibration dataset that provides error rates of semantic and fluency
+annotators & Additional reviewers, annotated calibration data, more time spent on
+adjudication \\
+Medium & Test larger or more models & The frozen protocol is applied to at least two
+pinned local models, and model-specific results are reported separately. & More
+RAM/GPU time, pinned model digests, and multiple runs \\
+Medium & Usability and accessibility evaluation & Representative users perform the
+core workflow, and an independent accessibility evaluation logs problems and solutions
+& Study protocol, participants, testing with assistive technologies, and analysis time \\
+Medium & Study by researchers & A task-based study examines whether the labels and
+comparisons views are actually useful for analysis work, in the spirit of
+interpretability tooling \cite{tenney2020}. & Ethics approval, participants, task setup, and analysis
+time \\
+Low & Strategies and tasks & Addition of new counterfactual families and datasets under
+the frozen target, budget, taxonomy of outcomes, and evaluation protocol & New
+implementations and datasets \\
 \bottomrule
 \end{tabularx}
-\caption{Future work with motivation and resource needs.}
+\caption{Prioritised future work with verifiable completion criteria.}
 \label{tab:future}
 \end{table}
+
+\clearpage
 
 % =============================================================================
 % 6. Conclusion
