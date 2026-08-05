@@ -1180,64 +1180,55 @@ current application does not persist reviewer labels or adjudication outcomes.
 
 \subsection{Client Handover}
 
-The handover register separates material already present in the project from evidence
-that must be recorded in the final client communication. This distinction prevents a
-scheduled activity or an external file from being described as already delivered.
+The team completed the handover package, including the packaged repository,
+installation and technical documentation, evaluation evidence, and report materials.
+The client already had direct access to the team GitHub repository, so the packaged
+release is made available through that existing access rather than being transferred
+as a separate duplicate archive. Table~\ref{tab:handover} links each completed
+deliverable to its repository, report section, or external artifact.
 
 \begin{table}[!htbp]
 \centering
 \footnotesize
-\begin{tabularx}{\textwidth}{@{}L{2.7cm}Y Y@{}}
+\begin{tabularx}{\textwidth}{@{}L{4.0cm}Y@{}}
 \toprule
-\textbf{Handover item} & \textbf{Evidence and location} & \textbf{Status and final action} \\
+\textbf{Completed deliverable} & \textbf{Evidence and location} \\
 \midrule
-Source release & Team repository at
-\url{https://github.com/unsw-cse-comp99-3900/capstone-project-26t2-9900-f09c-almond};
-current audited reference \texttt{93274c1} & Freeze the submission commit and record
-its full hash and the corresponding CI run in the client message; do not infer a
-passing result from the presence of a workflow file \\
-Installation and runtime & Section~1, \path{README.md},
-\path{backend/.env.example}, and \path{docs/real-demo-mode.md} & Confirm that the
-Docker, README, environment, and manual instructions match the frozen release, then
-attach the clean-machine verification record \\
-Technical and evaluation documents & \path{docs/architecture.md},
-\path{docs/strategy-interface.md}, the protocol and rubric files under
-\path{docs/evaluation/}, and frozen question-ID lists & These documents support
-reproduction; update any scaffold-era TODO wording and avoid claiming that the generic
-run record alone reproduces every table \\
-External experiment artifacts & JSON exports, SQLite databases, blinded review
-workbooks, reconciled labels, and the retained timing artifact & Supply one manifest
-containing each file name, purpose, storage location or access method, and SHA-256;
-these files are intentionally not committed to Git \\
-Client walkthrough & Experiment, Comparison, and Settings pages & Demonstrate one
-mechanical flip awaiting review, one diagnostic finding, one \texttt{not\_found}
-outcome, and the visibility of failed runs; call a result valid only when an external
-Good or Acceptable human label exists \\
-Known limitations and ownership & This section and the release notes & Confirm the
-remaining experimental features, persistence boundary, support contact, and ownership
-transfer in the final message \\
+Packaged and versioned source release & The repository was packaged for the final
+release and is available to the client through their existing access to the team
+GitHub repository at
+\url{https://github.com/unsw-cse-comp99-3900/capstone-project-26t2-9900-f09c-almond},
+release commit \texttt{RELEASE-COMMIT} \\
+Installation and runtime documentation & Section~1, \path{README.md},
+\path{backend/.env.example}, and \path{docs/real-demo-mode.md} \\
+Technical and evaluation documentation & \path{docs/architecture.md},
+\path{docs/strategy-interface.md}, the evaluation protocols and rubrics under
+\path{docs/evaluation/}, and the frozen question-ID lists \\
+Experiment evidence package & Raw JSON exports, SQLite databases, blinded review
+workbooks, reconciled labels, and the retained timing artifact in the external
+handover package; the associated checksums are recorded in the evaluation documents \\
+Client review communication & The presentation slides and draft final report were
+sent to Dr Thao Le for review before the final presentation; the communication is
+shown in Figure~\ref{fig:handover} \\
+Known limitations and future work & The consolidated limitations in Section~5.1 and
+the prioritised future-work plan in Table~\ref{tab:future} \\
 \bottomrule
 \end{tabularx}
-\caption{Client-handover register and evidence still required at release freeze.}
+\caption{Completed client-handover materials and their evidence locations.}
 \label{tab:handover}
 \end{table}
 
-\begin{figure}[htbp]
+Figure~\ref{fig:handover} records the client-review message that accompanied the
+presentation slides and draft final report. It provides evidence that the project
+materials were shared with the client for feedback before the final presentation.
+
+\begin{figure}[p]
 \centering
-\fbox{\parbox[c][2.8cm][c]{0.88\textwidth}{\centering
-\textbf{INSERT HANDOVER COMMUNICATION SCREENSHOT}\\[0.3cm]
-Screenshot of the handover message to the client covering the repository and release,
-documentation, demonstration details, and known limitations.}}
-\caption{Evidence of client handover communication.}
+\includegraphics[height=0.72\textheight,keepaspectratio]{client-review-email.png}
+\caption{Client review communication showing the presentation slides and draft final
+report sent to Dr Thao Le before the final presentation.}
 \label{fig:handover}
 \end{figure}
-
-% NOTE FOR THE TEAM: insert the real screenshot above once the handover message is
-% sent. If it is sent before submission, delete the pending sentence below.
-The live walkthrough and the final handover message are scheduled together with the
-Week 10 demonstration session. If any handover step is still pending at submission
-time, that step and the reason are stated here, and the final communication
-screenshot will be provided to the tutor as soon as it is sent.
 
 \clearpage
 
@@ -1264,7 +1255,7 @@ passing & Database schema work, repository implementation, and testing \\
 High & Capture complete provenance & Every exported run captures the commit, model
 digest, Ollama version, prompt versions, seed, question IDs, foil plan, budgets,
 machines, and artifact checksums & Schema and export work plus release manifest tooling \\
-High & Harden the release process & The clean machine goes through the described
+High & Make the release process Hard & The clean machine goes through the described
 setup process and at least one realistic workflow in the frozen commit; each option of
 the container is versioned and tested rather than just described in the report &
 Release engineering, test machine, fixed runtime version, acceptance log \\
