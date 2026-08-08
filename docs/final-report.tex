@@ -786,25 +786,26 @@ All quantitative measurements follow one rule: within a comparison, everything e
 the search method is frozen. In the common dev-40 matrix, all methods used the same
 pinned target model and target prompt, the same 40 questions, the same original answer
 and foil for each question, the same seed, budget of 20, and shared quality pipeline.
-Each method retained its own search logic and, where used, proposer prompt. All 160
-units completed in one job with no failures or skips. The set is success-enriched for
-earlier Strategy~1 results, so
-the comparison is within this selected development set, not a population estimate.
+Each technique kept its unique search logic and, where applicable, proposer prompts.
+All 160 units were generated in one run without any errors or skips. This collection
+is success-biased based on earlier Strategy~1 findings, so this comparison will be
+done only for this development sample.
 
-For each criterion we also fixed in advance what counts as evidence. Flip discovery
-and efficiency are read directly from run records: every run reports exactly one
-outcome category and its search, post-processing, proposer, and total call counts,
-and \texttt{not\_found} is stored as a real result rather than an error. Minimality
-is reported as the raw versus final edit distance, and the final edit is a verified
-local minimum, not a guaranteed global one. Fluency has a fixed pass line of
-$\geq 0.75$ on the automatic score, and runs where the judge fails record
-\texttt{not\_measured} instead of an invented value. Semantic validity is never
-decided automatically; it requires two independent blinded reviewers
-(Section~\ref{sec:review}). Usability and accessibility were checked by operating the
-complete workflow described earlier with keyboard-only navigation, browser zoom, all
-font sizes, themes, and both interface languages. Reproducibility means every
+Additionally, for each criterion, we defined the evidence of achieving the criterion
+ahead of time. Flip discovery and efficiency are determined through run logs that
+report exactly one outcome category, and all of its searches, post-processing,
+proposers and total calls, and \texttt{not\_found} is reported as a real result, not
+an error. Minimality is reported as raw vs. final edit distance, and the final edit
+distance is a verified local minimum, not necessarily a global minimum. The pass line
+for fluency is always $\geq 0.75$ on the automatic score and if the judge fails,
+\texttt{not\_measured} is used, not an invented value. Semantic validity was never
+decided automatically and required two independent blinded reviews
+(Section~\ref{sec:review}). Usability and accessibility are tested by working through
+the entire workflow as described above using just the keyboard, browser zoom, all
+font sizes, themes, and both interface languages. Reproducibility means that each
 comparison records its commit, model digest, prompt versions, seed, question IDs,
-foil plan, and budgets, so the same job can be repeated later. We deliberately did
+foil plan and budgets, allowing the same job to be reproduced in the future. We
+deliberately did
 not set a minimum flip rate as a success bar, because a low flip rate on a stable
 model is itself a finding. What we required instead is that every run ends in an
 honest category, and that no edit is called an explanation before it passes both the
@@ -904,28 +905,30 @@ Strategy 2 Discovery & 6/40 & 0 & 34 & 1.00 & 11.13 & 6.03 & 40.04 \\
 Strategy 3 Discovery & 5/40 & 6 & 29 & 2.20 & 1.93 & 2.33 & 13.48 \\
 \bottomrule
 \end{tabularx}
-\caption{Common success-enriched dev-40 matrix. Plain \texttt{not\_found} excludes
-diagnostic-only scenarios; ``Diag.'' counts diagnostic scenarios. Edit distance is
-averaged over primary results, while calls and runtime are averaged over all 40 runs.}
+\caption{Common success-enriched dev-40 matrix. The simple \texttt{not\_found} does
+not include diagnostic scenarios, but ``Diag.'' includes them. Edit Distance is
+averaged over the primary outputs, whereas calls and time are averaged over all 40
+runs.}
 \label{tab:commonmatrix}
 \end{table}
 
-The Baseline had the highest primary mechanical coverage on this set. Strategy~2 had
-the smallest final edits, and Strategy~3 used the fewest target calls and had the
-shortest runtime but separated six scenarios as diagnostic. The 35 primary outputs
-still require human review. The Baseline's 0.03 proposer average is one shared polish
-attempt; its search uses no proposer.
+The Baseline achieved the highest coverage of primary mechanical on this dataset.
+Strategy~2 achieved the lowest edit distance, and Strategy~3 achieved the lowest
+number of calls to the target and the lowest time, but separated six scenarios into
+diagnostic category. The 35 primary outputs still need to be manually reviewed. The
+Baseline's 0.03 proposer average is just one attempt at polishing, and the search
+requires no proposer.
 
 \subsection{Historical Strategy 1 Strict vs.\ Discovery}
 \label{sec:s1results}
 
-Before the common matrix, we ran Strategy~1's Sprint~2 strict version and
-Sprint~3 Discovery version on the same fixed set of 40 development questions, using
-the same model (\texttt{llama3.2:3b}, pinned digest), the same seed, and the same
-search budget of 20 target calls, with the same minimality and fluency settings
-enabled. This question set is success-enriched (questions for which previous versions
-found flips), so the rates compare the two versions rather than provide population
-estimates. All 80 units completed without error.
+Prior to common matrix, we applied the strict version of Strategy~1's Sprint~2 and
+Discovery version of Sprint~3 to the same predetermined set of 40 development
+questions with the same model (\texttt{llama3.2:3b}, pinned digest), the same seed,
+and the same search budget of 20 target calls. The set is success enriched (questions
+for which previous versions returned flips), and so the ratios measure performance
+of the two versions relative to each other as opposed to giving estimates of the
+population. All 80 units passed successfully.
 
 \begin{table}[htbp]
 \centering
@@ -947,30 +950,30 @@ Automatic fluency passes on final results & 4/4 & 9/10 \\
 \label{tab:s1}
 \end{table}
 
-Discovery produced six additional review-candidate scenarios (25\% versus 10\%),
-which is what the system was designed to do: broad searching first, followed by
-processing. The cost is also visible: Discovery created larger edits on average
-(9.40 compared with 4.00 words) and made more than twice as many target calls
-(4.55 versus 1.95). Minimality reduced the edits in both versions by more than half.
+Discovery generated six more review-candidates scenarios (25\% against 10\%), which
+is what the system is supposed to do: broad search first, then processing. The price
+to be paid is clear as well: Discovery generated larger edits (on the average 9.40
+words against 4.00 words) and doubled the number of target calls (4.55 against 1.95).
+Minimality has halved the number of edits for both systems.
 
-The candidate funnel describes where proposals go: Discovery requested 320
-candidates, received 194 raw candidates, parsed 193 of them, and delivered 178 after
-applying the requested-count limit. From these, 64 unique candidates that passed the
-deterministic primary filters and 63 target-verified proposals emerged; 14 of the
-verified proposals flipped across 10 different scenarios. Structural rejections
-included violations of sentence structure (94 proposals), and eight proposals
-exceeded the changed-fraction limit. Review of these 10 candidates is still pending;
-therefore, they remain mechanical flips for now.
+The candidate funnel shows the path of proposals: Discovery requested 320 candidates,
+obtained 194 raw candidates, processed 193 of them, and submitted 178 proposals after
+limiting the number of requested targets. From these 64 unique proposals that passed
+the deterministic filter, 63 target-verified proposals were generated; 14 of those
+proposals turned into flips in 10 scenarios. Structural rejections include failure of
+sentence structure (94 proposals), as well as eight proposals that violated the
+changed fraction limit. Review of those 10 proposals is still to come; thus, those are
+mechanical flips for the time being.
 
 \subsection{Historical Strategy 3 Strict vs.\ Discovery}
 \label{sec:s3results}
 
-For Strategy~3, we froze a new evaluation set of 20 questions without considering its
-scenarios or outputs. The evaluation set is disjoint from all previous Strategy~3 work
-and all other reviewed IDs. We disclose that an initial Strategy~1 sweep once examined
-all 400 EU questions; therefore, no set can be described as completely untouched. Both
-variants were run as a pair at commit \texttt{7fcdc82}, with a search limit and
-post-processing cap of 20 calls per variant. Selection hashes, artifact checksums, and
+As for Strategy~3, a frozen evaluation set of 20 questions was generated without any
+regard to its scenarios or outputs. The set does not intersect with anything that has
+been done before in relation to Strategy~3 or other ID variants reviewed here. Note
+that a strategy sweep using Strategy~1 once checked all 400 EU questions; thus, no set
+is fully untouched. Both strategies were run in tandem at commit \texttt{7fcdc82} with
+a limit of 20 calls each. Selection hashes, artifact checksums, and
 the complete configuration are recorded in the repository's evaluation documentation.
 
 \begin{table}[htbp]
@@ -1039,30 +1042,30 @@ why the methodology includes this stage.
 
 \subsection{Strategy 2 Status}
 
-The Discovery version of Strategy~2 is implemented and covered by the 230-test backend
-suite. In the common matrix it produced 6/40 primary review candidates, no diagnostic
-scenarios, and 34 plain \texttt{not\_found} outcomes. Its primary results had an average
-final edit distance of 1.00; all runs averaged 11.13 target calls, 6.03 proposer calls,
-and 40.04~s. A paired strict-versus-Discovery evaluation was not completed.
+The Discovery variation of Strategy~2 is executed and validated using the 230 test
+backend suite. It yielded 6/40 review candidate solutions, 0 diagnostic scenarios, and
+34 straight \texttt{not\_found} results in the common matrix. The average final edit
+distance of its primary output was 1.00, while runs on average made 11.13 target calls,
+6.03 proposer calls, and took 40.04~s. Comparison of strict and Discovery versions was
+not conducted.
 
 \subsection{Runtime}
 \label{sec:runtime}
 
-In the common dev-40 matrix, all methods ran sequentially on the same RTX 4060 laptop
-GPU. Average runtimes were 38.32~s for the Baseline, 25.06~s for Strategy~1, 40.04~s
-for Strategy~2, and 13.48~s for Strategy~3. These values are comparable only within
-that matrix.
+For the popular dev-40 matrix, all approaches were run sequentially on the same RTX
+4060 laptop GPU. Baseline: 38.32~s, Strategy~1: 25.06~s, Strategy~2: 40.04~s, and
+Strategy~3: 13.48~s. These results are comparable only within this matrix.
 
-Separately, dataset-wide runtimes are slow on CPU (400 questions take hours to
-compute), so, following the client's suggestion, we present one high-runtime question:
-the question with the maximum runtime among the preserved Sprint~3 artifacts when
-this report was prepared (\texttt{emobench\_q\_en\_121\_emotion}, 44 words, which
-previously took 59.6~s for Strategy~1 Discovery). All seven strategy arms were
-executed sequentially on this question using the same computer (Windows~11, CPU-only,
-\texttt{llama3.2:3b}, search budget 20, a single foil, and shared quality-evaluation
-stages enabled). The timing artifact is retained outside Git and should be delivered
-with this report together with its filename and checksum. This table provides
-descriptive evidence, not a benchmark.
+Additionally, computation times per whole dataset are high on CPU (400 questions take
+many hours to run), thus, in accordance with the client's request, here we provide one
+question with high computation time: the question with the highest computation time
+among the preserved Sprint~3 artifacts at the time this report was written
+(\texttt{emobench\_q\_en\_121\_emotion}, 44 words, that required 59.6~s for Strategy~1
+Discovery). All seven strategy arms were run sequentially on this question on the same
+computer (Windows~11, CPU-only, \texttt{llama3.2:3b}, search budget 20, one foil, and
+quality evaluation stages enabled). Timing artifact is stored outside Git and should
+be provided with this report along with the file name and checksum. This table
+provides descriptive information, not benchmark.
 
 \begin{table}[htbp]
 \centering
@@ -1085,13 +1088,13 @@ Strategy 3 discovery & 6.1 s & not found & 1 & 2 \\
 \label{tab:runtime}
 \end{table}
 
-Two observations are apparent. First, Strategy~2 strict is the most costly arm
-(62~s), because occlusion probing makes many target calls before any candidate exists;
-this is consistent with its design. Second, runtime depends strongly on whether a flip
-is found early: arms that flipped early finished early, whereas \texttt{not\_found}
-arms finished by exhausting either all proposals or all probes. The proposer operates
-at temperature 0.7 and is not bit-for-bit reproducible between runs. Therefore, the
-table indicates cost scale only; it does not imply a ranking.
+Conclusion probing makes numerous calls to the target before any candidate is
+produced; this is how it should work according to design. Secondly, the runtime is
+heavily dependent on whether a flip is detected early: those that did flip early
+terminated early, while those that did not flip (``\texttt{not\_found}'') terminated
+when all proposals and probes were exhausted. Proposer runs at temperature 0.7 and is
+not bit-for-bit reproducible from run to run. Consequently, the table shows cost
+scaling only.
 
 \subsection{Qualitative Analysis: Good and Bad Examples}
 \label{sec:qualitative}
@@ -1156,14 +1159,13 @@ reduced-motion handling, enhanced focus, and a magnifier. These are implementati
 outcomes; the repository does not contain a formal frontend usability or accessibility
 test suite, so they are not presented as a completed user-study result.
 
-Reproducibility is enabled through frozen question-ID lists, evaluation files,
-checksums, Git commits, and retained external artifacts. Nevertheless, the general
-experiment-execution log does not necessarily include every model digest, seed, Ollama
-version, proposer prompt, or machine specification. Fluency is measured; however,
-its reliability has only been partially verified: one false positive and one correct
-flagging are reported above. Semantic validity remains the objective furthest from
-completion. The offline dual-review process has been completed for only one consumed
-run, while all 35 common-matrix primary results are still awaiting verification.
+Reproducibility is achieved using frozen question ID lists, evaluations, checksums,
+Git commits, and saved artifacts. Still, the general experiment execution log may not
+contain all the model digests, seeds, Ollama version, proposer prompt, and machine
+specification. Fluency is assessed; nevertheless, its accuracy can be considered
+validated to some extent as seen in the two cases reported above. Semantic validity is
+the goal that has still not been met in full. Only one review has been performed on
+the one consumed run, but not yet on the 35 common matrix primary results.
 Strategy~2 has controlled Discovery evidence but no paired strict-versus-Discovery
 evaluation, and the current application does not persist reviewer labels or
 adjudication outcomes.
