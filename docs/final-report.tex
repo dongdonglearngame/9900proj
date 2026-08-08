@@ -154,9 +154,12 @@ show the smallest change to the input that changes the output
 \cite{wachter2018,miller2019}.
 
 The system contains a simple word-level baseline and three main counterfactual
-strategies: \stratone{}, \strattwo{}, and \stratthree{}. All four run against the same
-frozen target model through the same verification path, so their results can be
-compared fairly.
+strategies: \stratone{}, \strattwo{}, and \stratthree{}. A common dev-40 run compared
+all four on the same questions, foils, budget, frozen target model, and verification
+path. The Baseline produced 13/40 primary review candidates, Strategy~1 produced
+11/40, Strategy~2 produced 6/40, and Strategy~3 produced 5/40 plus six diagnostic
+scenarios. These are within-set mechanical results, not population estimates or
+human-valid rates.
 
 This distinction between a \emph{mechanical flip} (there was a change in the model's
 response), a \emph{human-valid explanation} (there is agreement that the edit is a
@@ -170,9 +173,9 @@ In Sprint 3 we introduced a shared minimality test phase, a fluency test, develo
 discovery version for each strategy, refined the labels in the user interface, and
 included accessibility options. This report describes the design that we have finally
 come up with, provides the results of our measurement experiments, and presents
-examples of valid, invalid, and diagnostic outcomes. It clearly states what goals we
-have reached and what goals we have missed. Every flip presented is treated as an
-illustration of model behavior in a fixed environment.
+examples of provisionally acceptable, invalid, and diagnostic outcomes. It clearly
+states what goals we have reached and what goals we have missed. Every flip presented
+is treated as an illustration of model behavior in a fixed environment.
 
 % =============================================================================
 % 1. Installation manual
@@ -299,7 +302,7 @@ same for all results.
   \node[block, below=of api] (services) {Service Layer\\prediction, counterfactual, evaluation};
   \node[block, below=of services] (strategies) {Strategy Layer\\Baseline, Strategy 1, Strategy 2, Strategy 3};
   \node[quality, below=of strategies] (quality) {Shared Quality Pipeline\\minimality, fluency, risk labels};
-  \node[block, below=of quality] (results) {Results and Metrics\\valid, diagnostic, not found, failed};
+  \node[block, below=of quality] (results) {Results and Metrics\\flip for review, diagnostic,\\not found, failed};
 
   \node[source, left=of services] (sqlite) {SQLite\\scenarios, prediction cache,\\run metadata, job checkpoints};
   \node[source, left=of sqlite] (emobench) {EmoBench\\local dataset};
@@ -342,9 +345,9 @@ Target Harness.}
   explanation for it.
 \end{enumerate}
 
-Since all strategies have the same target function, prompt version, success criterion,
-budget, and metric definitions, the only thing that could distinguish different
-strategies is their search methods. That is why it is a fair comparison.
+Since all strategies have the same target function, target prompt version, success
+criterion, budget, and metric definitions within a controlled run, the only thing that
+could distinguish different strategies is their search methods.
 
 % =============================================================================
 % 3. Design justifications
@@ -408,9 +411,9 @@ We use the following terms throughout the report.
   highlights clear examples, and human judges resolve other flips manually through
   labeling as Good, Acceptable, or Invalid with reason codes provided.
   \item \textbf{Diagnostic finding.} Diagnostic finding refers to a verified flip
-  which our analysis detects as a sensitivity of the model: near-synonym substitution
-  and leakage of the answer are among examples. We preserve the finding as evidence
-  about the model but do not present it as an explanation.
+  associated with a risk flag, such as near-synonym substitution or answer leakage.
+  We preserve the finding as suspected sensitivity evidence but do not present it as
+  an explanation.
   \item \textbf{Budget.} The budget determines the maximum number of checks of the
   target model that a strategy can make on one scenario. Search and post-processing
   have their own budget limits. We record every check so that the reported costs
@@ -420,14 +423,14 @@ We use the following terms throughout the report.
 These labels are hierarchical since a mechanical flip is required for counterfactual
 explanation but is insufficient by itself. The automated classifier places each run
 into precisely one of four categories: mechanical flip (requires review), diagnostic
-observation, not found, and fail. The results of the entire process are reported using
+observation, not found, and failed. The results of the entire process are reported using
 the four categories in section~4 (Figure~\ref{fig:taxonomy}). The names Good,
 Acceptable and Invalid refer to the external blinded review methodology discussed in
 Section~\ref{sec:review}. The automated pipeline may flag flips as requiring review.
-Even when reviewing one such run fully, all four flips that were published were
-validated, fluent, and moderate size but all were deemed to be Invalid
-(Section~\ref{sec:review}). This fact empirically proves the separation of automatic
-categories from human judgment.
+Even when reviewing one such run fully, all four retained review candidates were
+mechanically verified, fluent, and moderate size but all were deemed Invalid
+(Section~\ref{sec:review}). This illustrates the separation of automatic categories
+from human judgment.
 
 \begin{figure}[htbp]
 \centering
@@ -559,9 +562,9 @@ contrastive editing method \cite{ross2021} to a black-box setting. The discovery
 approach splits its budget into probes of importance and checks of candidates.
 It probes several top-ranked spans and mask widths, and records diagnostic
 candidates separately. Both approaches have been implemented and unit tested, and both
-of them passed a real model smoke test. Comparative evaluation of the two variants
-has not been performed during the term; the expected benefit of this strategy
-has remained a design hypothesis (Section~4).
+of them passed a real model smoke test. The Discovery variant was included in the
+common dev-40 matrix, but a paired strict-versus-Discovery evaluation was not
+performed (Section~4).
 
 \paragraph{\stratthree{}.}
 This strategy changes one situational concept, such as time, place, relationship,
@@ -601,7 +604,7 @@ the baseline for the change in Sprint~3.
   \node[sbox,right=0.32cm of l0] (b1) {select next word/phrase\\substitution from fixed list};
   \node[sbox,right=0.5cm of b1] (b2) {apply to scenario};
   \node[tbox,right=0.5cm of b2] (b3) {frozen target check};
-  \node[sbox,right=0.5cm of b3] (b4) {publish flip\\or test next candidate};
+  \node[sbox,right=0.5cm of b3] (b4) {retain flip\\or test next candidate};
   \draw[arr] (b1)--(b2); \draw[arr] (b2)--(b3); \draw[arr] (b3)--(b4);
 
   % S1
@@ -698,7 +701,7 @@ focal person, multi-concept spans, and over-inclusive concept spans. The flagged
 marked as ``mechanical flip, review needed'' until two reviewers give independent
 Good, Acceptable, or Invalid ratings and reasons. No reviewer knows what label another gave, and an adjudicator decides on the disagreement.
 The review process happens offline, outside the application, and the results show up in the evaluation documents. In the only fully executed
-review, the deterministic rules failed to flag any of the four published flips (see Section~\ref{sec:review}). The result suggests keeping the
+review, the deterministic rules failed to flag any of the four review candidates (see Section~\ref{sec:review}). The result suggests keeping the
 human review stage a mandatory part of the procedure. Minimality and fluency cannot turn an invalid edit into a good edit. For instance,
 a short and fluent answer leak is still invalid.
 
@@ -781,15 +784,13 @@ Section~\ref{sec:quality}. Efficiency, usability, and reproducibility judge the 
 itself rather than any single edit.
 
 All quantitative measurements follow one rule: within a comparison, everything except
-the strategy is frozen. The same pinned model, the same prompt versions, the same
-questions, the same foil for every question, the same seed, and the same search
-budget are used, and every verified flip then passes through the same quality
-pipeline. If two variants produce different numbers under this rule, the difference
-can only come from how they search. The rule also has a limit that we keep visible:
-the strategies were evaluated on different question sets at different times, so we
-only compare the strict and discovery variants within one set
-(Sections~\ref{sec:s1results} and~\ref{sec:s3results}) and never rank strategies
-against each other across sets.
+the search method is frozen. In the common dev-40 matrix, all methods used the same
+pinned target model and target prompt, the same 40 questions, the same original answer
+and foil for each question, the same seed, budget of 20, and shared quality pipeline.
+Each method retained its own search logic and, where used, proposer prompt. All 160
+units completed in one job with no failures or skips. The set is success-enriched for
+earlier Strategy~1 results, so
+the comparison is within this selected development set, not a population estimate.
 
 For each criterion we also fixed in advance what counts as evidence. Flip discovery
 and efficiency are read directly from run records: every run reports exactly one
@@ -822,7 +823,7 @@ Flip discovery & Raw mechanical flip rate and \texttt{not\_found} rate & Measure
 Minimality & Raw/final edit distance, changed-word fraction, one-to-two-word rate & Measures how much text must change while the flip remains \\
 Fluency & Versioned automatic score plus human judgement & Finds readability problems; the automatic score is not proof \\
 Semantic validity & Two-reviewer Good/Acceptable/Invalid labels with reason codes & Separates useful explanations from leakage, contradiction, synonym, and surface effects \\
-Efficiency & Search, post-processing, proposer, and total calls; same-machine runtime & Shows the local CPU cost of each strategy and quality stage \\
+Efficiency & Search, post-processing, proposer, and total calls; same-machine runtime & Shows the computational cost of each strategy and quality stage \\
 Usability and accessibility & Keyboard completion, contrast, zoom, themes, language, labels & Whether users can operate and understand the results \\
 Reproducibility & Fixed commit, model digest, prompt versions, seed, IDs, foil plan, budgets & Makes comparisons auditable and repeatable \\
 \bottomrule
@@ -840,7 +841,7 @@ four automated categories:
 \begin{itemize}
   \item \textbf{Mechanical flip -- needs review:} the target was flipped to the foil,
   but quality has not been established yet;
-  \item \textbf{Diagnostic finding:} a verified flip due to lexical, formatting,
+  \item \textbf{Diagnostic finding:} a verified flip associated with lexical, formatting,
   focal-shift, evaluative-cue, or answer-leakage sensitivity that is kept for
   diagnostic purposes instead of being a publishable counterfactual;
   \item \textbf{Not found:} no flips were detected within the fixed budget, which is
@@ -883,10 +884,43 @@ Strategy 3, concept-guided & EU-400 & 39/400 & Average successful edit distance 
 \label{tab:prelim}
 \end{table}
 
-\subsection{Sprint 3 Results: Strategy 1 Strict vs.\ Discovery}
+\subsection{Common dev-40 All-Strategy Results}
+\label{sec:commonmatrix}
+
+We ran the Baseline and the Discovery variant of Strategies~1--3 in one job under the
+controls above. The 40-question set contains 20 cause and 20 emotion questions. It is
+a success-enriched development set, so these results support a controlled within-set
+comparison only.
+
+\begin{table}[htbp]
+\centering
+\scriptsize
+\begin{tabularx}{\textwidth}{@{}Y r r r r r r r@{}}
+\toprule
+\textbf{Method} & \textbf{Primary} & \textbf{Diag.} & \textbf{Plain NF} & \textbf{Final edit} & \textbf{Target calls} & \textbf{Proposer calls} & \textbf{Runtime (s)} \\
+\midrule
+Baseline & 13/40 & 0 & 27 & 2.00 & 16.03 & 0.03 & 38.32 \\
+Strategy 1 Discovery & 11/40 & 0 & 29 & 2.82 & 4.75 & 2.03 & 25.06 \\
+Strategy 2 Discovery & 6/40 & 0 & 34 & 1.00 & 11.13 & 6.03 & 40.04 \\
+Strategy 3 Discovery & 5/40 & 6 & 29 & 2.20 & 1.93 & 2.33 & 13.48 \\
+\bottomrule
+\end{tabularx}
+\caption{Common success-enriched dev-40 matrix. Plain \texttt{not\_found} excludes
+diagnostic-only scenarios; ``Diag.'' counts diagnostic scenarios. Edit distance is
+averaged over primary results, while calls and runtime are averaged over all 40 runs.}
+\label{tab:commonmatrix}
+\end{table}
+
+The Baseline had the highest primary mechanical coverage on this set. Strategy~2 had
+the smallest final edits, and Strategy~3 used the fewest target calls and had the
+shortest runtime but separated six scenarios as diagnostic. The 35 primary outputs
+still require human review. The Baseline's 0.03 proposer average is one shared polish
+attempt; its search uses no proposer.
+
+\subsection{Historical Strategy 1 Strict vs.\ Discovery}
 \label{sec:s1results}
 
-We locked down the configuration and ran Strategy~1's Sprint~2 strict version and
+Before the common matrix, we ran Strategy~1's Sprint~2 strict version and
 Sprint~3 Discovery version on the same fixed set of 40 development questions, using
 the same model (\texttt{llama3.2:3b}, pinned digest), the same seed, and the same
 search budget of 20 target calls, with the same minimality and fluency settings
@@ -929,7 +963,7 @@ included violations of sentence structure (94 proposals), and eight proposals
 exceeded the changed-fraction limit. Review of these 10 candidates is still pending;
 therefore, they remain mechanical flips for now.
 
-\subsection{Sprint 3 Results: Strategy 3 Strict vs.\ Discovery}
+\subsection{Historical Strategy 3 Strict vs.\ Discovery}
 \label{sec:s3results}
 
 For Strategy~3, we froze a new evaluation set of 20 questions without considering its
@@ -988,12 +1022,15 @@ contaminated control arm (the strict arm had received part of the Discovery
 configuration), so its strict-versus-Discovery comparison is void and the 20 questions
 are consumed; we keep the run only as review-process evidence and repeated the
 mechanical comparison on the new frozen set above. Two reviewers independently
-labelled all four published flips with strategy identity hidden, agreed on 3 of 4
+labelled all four review candidates with strategy identity hidden, agreed on 3 of 4
 validity labels, and adjudicated the one disagreement. The final labels were 4 Invalid
 out of 4, with reason codes including grammar, irrelevant change, near-synonym,
 contradiction, evaluative cue, excessive edit, and model sensitivity. The reviewer
 sheets and reconciled labels are external evaluation artifacts; they are not persisted
 by the current application.
+
+The 35 primary review candidates from the common dev-40 matrix remain pending blinded
+review.
 
 This is an informative negative finding. All four edits were based on accurate
 single-concept metadata, had mechanically verified flips, passed the fluency test,
@@ -1003,21 +1040,22 @@ why the methodology includes this stage.
 
 \subsection{Strategy 2 Status}
 
-The Discovery version of Strategy~2 is implemented and tested through dedicated tests
-for budget allocation, probe accounting, and diagnostic separation. The current
-backend test suite includes 230 passing tests. A three-question real-model smoke test
-confirmed that both versions completed successfully and found 0/3 flips. These three
-questions are deliberately not presented as evidence of the strategy's effectiveness.
-
-A full paired development and evaluation run, as in Sections~\ref{sec:s1results} and
-\ref{sec:s3results}, was not completed during the term; consequently, Strategy~2's
-comparative effectiveness remains an open objective.
+The Discovery version of Strategy~2 is implemented and covered by the 230-test backend
+suite. In the common matrix it produced 6/40 primary review candidates, no diagnostic
+scenarios, and 34 plain \texttt{not\_found} outcomes. Its primary results had an average
+final edit distance of 1.00; all runs averaged 11.13 target calls, 6.03 proposer calls,
+and 40.04~s. A paired strict-versus-Discovery evaluation was not completed.
 
 \subsection{Runtime}
 \label{sec:runtime}
 
-Dataset-wide runtimes are slow on CPU (400 questions take hours to compute), so,
-following the client's suggestion, we present one high-runtime question from that set:
+In the common dev-40 matrix, all methods ran sequentially on the same RTX 4060 laptop
+GPU. Average runtimes were 38.32~s for the Baseline, 25.06~s for Strategy~1, 40.04~s
+for Strategy~2, and 13.48~s for Strategy~3. These values are comparable only within
+that matrix.
+
+Separately, dataset-wide runtimes are slow on CPU (400 questions take hours to
+compute), so, following the client's suggestion, we present one high-runtime question:
 the question with the maximum runtime among the preserved Sprint~3 artifacts when
 this report was prepared (\texttt{emobench\_q\_en\_121\_emotion}, 44 words, which
 previously took 59.6~s for Strategy~1 Discovery). All seven strategy arms were
@@ -1126,9 +1164,10 @@ version, proposer prompt, or machine specification. Fluency is measured; however
 its reliability has only been partially verified: one false positive and one correct
 flagging are reported above. Semantic validity remains the objective furthest from
 completion. The offline dual-review process has been completed for only one consumed
-run, while Strategy~1 and Strategy~3 results are still awaiting verification.
-Strategy~2 has smoke-level execution evidence but no full paired evaluation, and the
-current application does not persist reviewer labels or adjudication outcomes.
+run, while all 35 common-matrix primary results are still awaiting verification.
+Strategy~2 has controlled Discovery evidence but no paired strict-versus-Discovery
+evaluation, and the current application does not persist reviewer labels or
+adjudication outcomes.
 
 % =============================================================================
 % 5. Limitations and future work
@@ -1153,14 +1192,12 @@ current application does not persist reviewer labels or adjudication outcomes.
   failed to identify the four human-invalid flips, and greedy restoration may produce
   fragments; hence, raw, minimal and final texts are visible for inspection.
   \item \textbf{Human review scale and process.} Labels by two reviewers are available
-  for one consumed run, where all four published flips have been marked as Invalid.
-  Blind labeling for the latest Strategy 1 and Strategy 3 flips is still pending, and
-  review and adjudication are done outside the app rather than stored in its
-  UI/database.
-  \item \textbf{Incomplete comparisons.} There is only smoke-level evidence for
-  Strategy 2, and no all-strategy controlled holdout matrix has been performed during
-  this term; paired comparisons of Strategies above use different sets and cannot be
-  compared against each other.
+  for one consumed run, where all four review candidates were marked Invalid. Blind
+  labeling for the 35 common-matrix primary results is still pending, and review and
+  adjudication are done outside the app rather than stored in its UI/database.
+  \item \textbf{Incomplete comparisons.} The all-strategy matrix uses a
+  Strategy-1-success-enriched development set. No all-strategy controlled holdout
+  matrix has been performed, so the results are not population estimates.
   \item \textbf{Run variability.} The proposer performs runs at temperature 0.7 and is
   not bit-for-bit deterministic during local runs with the same seed, so paired
   same-job comparisons are provided but repeat-run variance is unknown.
@@ -1174,8 +1211,8 @@ current application does not persist reviewer labels or adjudication outcomes.
   keyboard accessibility, zoom, themes, font scaling, reduced-motion support, and two
   interface languages, but there have been no usability studies or independent
   accessibility audits. The language toggle does not translate the benchmark
-  scenarios, and installation claims, runtime artifacts, and the README file have to
-  be confirmed against the frozen release.
+  scenarios. Installation was verified on one Windows~11 machine, but not independently
+  across platforms.
 \end{itemize}
 
 \subsection{Client Handover}
@@ -1198,7 +1235,7 @@ Packaged and versioned source release & The repository was packaged for the fina
 release and is available to the client through their existing access to the team
 GitHub repository at
 \url{https://github.com/unsw-cse-comp99-3900/capstone-project-26t2-9900-f09c-almond},
-release commit \texttt{RELEASE-COMMIT} \\
+evaluated source commit \texttt{93274c1} \\
 Installation and runtime documentation & Section~1, \path{README.md},
 \path{backend/.env.example}, and \path{docs/real-demo-mode.md} \\
 Technical and evaluation documentation & \path{docs/architecture.md},
@@ -1245,17 +1282,17 @@ achieves its success criteria.
 \toprule
 \textbf{Priority} & \textbf{Direction} & \textbf{Success criterion} & \textbf{Requirements} \\
 \midrule
-High & Complete the evaluation programme & Complete Strategy 1 and Strategy 3 blinded
-labels, a paired Strategy 2 evaluation, one all-strategy matrix on a newly frozen set,
-and repeated-run variance estimates & Reviewer time, new question set, adjudication,
-and repeated benchmark runs \\
+High & Complete the evaluation programme & Blind-review the 35 common-matrix primary
+outputs, run one all-strategy matrix on a newly frozen holdout set, and estimate
+repeated-run variance & Reviewer time, new question set, adjudication, and repeated
+benchmark runs \\
 High & Persist completed results & Counterfactual payloads, metrics, and comparisons
 remain available for queries after a backend restart, with migration and restart test
 passing & Database schema work, repository implementation, and testing \\
 High & Capture complete provenance & Every exported run captures the commit, model
 digest, Ollama version, prompt versions, seed, question IDs, foil plan, budgets,
 machines, and artifact checksums & Schema and export work plus release manifest tooling \\
-High & Make the release process Hard & The clean machine goes through the described
+High & Harden the release process & The clean machine goes through the described
 setup process and at least one realistic workflow in the frozen commit; each option of
 the container is versioned and tested rather than just described in the report &
 Release engineering, test machine, fixed runtime version, acceptance log \\
@@ -1297,14 +1334,15 @@ We delivered a working, dockerised local tool and a controlled way to study
 counterfactual editing strategies on emotional-reasoning questions. The main result is
 not one high flip rate. It is a reproducible workflow that shows when a frozen model's
 answer can be changed, how small and readable the change is, what kind of change it
-was, and whether people judge it a useful explanation. On our measurements, discovery
-search finds clearly more mechanical flips than the strict Sprint 2 baseline on
-development data (25\% versus 10\% for Strategy 1) at a higher edit-size and call
-cost, a harder unenriched set yields very few flips for Strategy 3 (1/20), and the one
-fully reviewed run showed that verified, fluent, small edits can still all be invalid
-as explanations. The honest separation of valid, diagnostic, not-found, and failed
-outcomes, kept visible from the code through to the interface, is what makes those
-statements trustworthy, and it is the part of this project we would keep first.
+was, and whether people judge it a useful explanation. On the common success-enriched
+dev-40 matrix, the Baseline produced 13/40 primary review candidates, Strategy~1
+produced 11/40, Strategy~2 produced 6/40, and Strategy~3 produced 5/40 plus six
+diagnostic scenarios. These are within-set mechanical results, not population estimates
+or human-valid rates, and the one fully reviewed historical run showed that verified,
+fluent, small edits can still all be invalid as explanations. The honest separation of
+mechanical flips for review, diagnostic findings, not-found, and failed outcomes, kept
+visible from the code through to the interface, is what makes those statements
+trustworthy.
 
 % =============================================================================
 % References
@@ -1444,8 +1482,19 @@ the same focal person or event and preserve at least one meaningful
 content word from that sentence. Never replace a focal person's outcome
 with a reaction by the crowd or another bystander. Before returning each
 rewrite, silently check every unchanged sentence for references to a fact
-the rewrite removed. [quality examples omitted for space; they show one
-good three-word outcome edit and three bad patterns to avoid]
+the rewrite removed. Quality example: original='Maya submitted her proposal,
+but her manager rejected it without explanation.' good_rewrite='Maya
+submitted her proposal, and her manager approved it without hesitation.'
+This changes three words inside the existing sentence and keeps the story
+grammatical. Bad example: 'Maya submitted her proposal, but her manager
+rejected it without explanation. Everything was suddenly fine.' This
+appends an unsupported generic sentence instead of editing the event. Use
+the examples only as quality guidance; never copy them. Another bad example:
+original='Omar won the race. He raised the trophy.' rewrite='Omar reached
+the final. He raised the trophy.' The unchanged trophy sentence relies on
+the removed win. A bad focal-person example is original='Kai lost the
+match.' rewrite='The crowd cheered loudly.' The rewrite drops Kai's outcome
+and substitutes a bystander reaction.
 Return exactly the requested number of distinct rewrites and use a
 different change mechanism where possible. Treat avoid entries as prior
 failures and do not repeat them. Return JSON only; modified_scenario is
