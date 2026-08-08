@@ -355,17 +355,16 @@ could distinguish different strategies is their search methods.
 \section{Design Justifications}
 
 We designed the system to support a controlled comparison of counterfactual search
-strategies rather than to maximise the number of answer flips. This objective
-required a frozen target interface shared by every strategy
-(Section~\ref{sec:harness}) and strategy families based on distinct search
-hypotheses (Section~\ref{sec:strategies}). It also required shared quality stages
-that cannot independently classify a flip as a valid explanation
-(Section~\ref{sec:quality}). The numerical settings in this chapter (the 0.60
-changed-fraction cap, the 0.75 fluency threshold, the three-flip retention limit,
-and the overbroad-span rule) are operational choices made during development, not
-calibrated constants. Experiments and feedback from the client and tutor informed
-each design decision. Table~\ref{tab:evolution} summarises the main changes across
-the three sprints.
+strategies rather than to maximise the number of answer flips. For the completion of this objective,
+a frozen target user interface was needed for all strategies
+(Chapter~\ref{sec:harness}), as well as strategy groups with different search
+hypotheses (Chapter~\ref{sec:strategies}). Also, shared quality phases were needed,
+which are unable to classify a flip independently as a valid explanation
+(Chapter~\ref{sec:quality}). The numerical parameters used in this chapter (0.60
+fraction changed, 0.75 fluency, three flips limitation and overbroad span rule)
+are the choices made in implementation, rather than calibrated constants. Each
+design choice was driven by experiments and feedback of the client and tutor.
+Table~\ref{tab:evolution} shows a summary of key changes during the three sprints.
 
 \begin{table}[htbp]
 \centering
@@ -673,10 +672,10 @@ captured a sound explanation.
 \paragraph{Fluency (scored proxy).}
 A separate local judge runs the same \texttt{llama3.2:3b} model using the
 same rubric prompt with temperature 0 and prompt version
-\texttt{fluency-judge-v2-rubric-100}. The judge looks at the edited scenario but does not see
-choices and the foil; the judge provides an integer score from 0 to 100. A score of 90--100
-means natural text, 75--89 means a minor problem, 40--74 means obvious awkwardness, and
-0--39 means broken text. We divide this integer by 100 and get $\text{score} = \text{judge
+\texttt{fluency-judge-v2-rubric-100}. The judge studies the modified story but fails to recognize
+options and the foil; the judge gives an integer rating between 0 and 100. A rating of 90-100
+indicates natural text, 75-89 indicates a mild problem, 40-74 indicates obvious awkwardness, and
+0-39 indicates broken text. We divide this integer by 100 and get $\text{score} = \text{judge
 integer} / 100 \in [0,1]$. A fluency assessment is marked as passing when
 $\text{score} \ge 0.75$. The flag denotes
 only readability, whereas the validity check has to be done separately. Low or lack of a score
@@ -700,10 +699,10 @@ of just replacing a near-synonym or surface form, changes involving a shift of t
 focal person, multi-concept spans, and over-inclusive concept spans. The flagged flips are documented as findings. All others are
 marked as ``mechanical flip, review needed'' until two reviewers give independent
 Good, Acceptable, or Invalid ratings and reasons. No reviewer knows what label another gave, and an adjudicator decides on the disagreement.
-The review process happens offline, outside the application, and the results show up in the evaluation documents. In the only fully executed
-review, the deterministic rules failed to flag any of the four review candidates (see Section~\ref{sec:review}). The result suggests keeping the
-human review stage a mandatory part of the procedure. Minimality and fluency cannot turn an invalid edit into a good edit. For instance,
-a short and fluent answer leak is still invalid.
+Review takes place off-line, not in the application itself, and the outcome will appear in the evaluation documents. In the only executed review,
+the deterministic policy did not catch any of the four review subjects (Section~\ref{sec:review}). This outcome indicates that keeping the human
+review step as a requirement would be reasonable. Minimality and fluency do not make a bad edit good. A brief and fluent answer leak is
+still a bad edit.
 
 
 % =============================================================================
